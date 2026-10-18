@@ -1,3 +1,4 @@
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -15,7 +16,7 @@ public class Main {
     private static int PERIODO_MS = 1000;
 
     // Función para registrar al monitor en la central
-    private static boolean registrar(String ip, int puerto, int id) {
+    private static boolean registrar(String ip, int puerto, String id) {
         // Mensaje que espera recibir de la central
         String msg;
 
@@ -43,6 +44,11 @@ public class Main {
         }
     }
 
+    // Función para gestionar un engine cuando llega
+    private static void gestionarEngine(Socket s, String ipCentral, int puertoCentral, String idWS) {
+
+    }
+
     public static void main(String[] args) {
         // Se debe comprobar si la cantidad de argumentos es la correcta
         if(args.length != 4) {
@@ -62,11 +68,25 @@ public class Main {
             return;
         }
 
-        // Se debe registrar en la central, para ello se conecta y espera respuesta
-        try(Socket s = new Socket(args[1], puertoCentral)) {
+        String ipCentral = args[1];
+        String idWS = args[3];
 
+        // Se debe registrar en la central, para ello se conecta y espera respuesta
+        if(!registrar(ipCentral, puertoCentral, idWS)) {
+            return;
+        }
+
+        // Se abre el servidor para el engine 
+        try(ServerSocket ss = new ServerSocket(puertoMonitor)) {
+            System.out.println("Monitor " + idWS + " escuchando en el puerto " + puertoMonitor);
+
+            //Bucle para esperar engines indefinidamente
+            for(;;) {
+                Socket s = ss.accept();
+                gestionarEngine(s, ipCentral, puertoCentral, idWS);
+            }
         } catch(IOException e) {
-            System.out.println("Error: no se puede conectar a la central.");
+            System.out.println("Error: no se puede abrir el puerto " + puertoMonitor);
             return;
         }
     }
