@@ -13,7 +13,7 @@
     <artifactId>wm-ws-m</artifactId>
 
     <properties>
-        <main.class>Main</main.class>
+        <main.class>ua.es.mon.Main</main.class>
     </properties>
 
     <build>

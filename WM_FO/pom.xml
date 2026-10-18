@@ -13,7 +13,7 @@
     <artifactId>wm-fo</artifactId>
 
     <properties>
-        <main.class>Main</main.class>
+        <main.class>ua.es.fo.Main</main.class>
     </properties>
 
     <dependencies>

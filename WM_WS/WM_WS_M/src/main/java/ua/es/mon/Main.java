@@ -1,3 +1,4 @@
+<<<<<<< HEAD:WM_WS/WM_WS_M/src/main/java/Main.java
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.io.BufferedReader;
@@ -5,6 +6,10 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.SocketTimeoutException;
+=======
+package ua.es.mon;
+
+>>>>>>> develop:WM_WS/WM_WS_M/src/main/java/ua/es/mon/Main.java
 
 public class Main {
     // CONSTANTES
