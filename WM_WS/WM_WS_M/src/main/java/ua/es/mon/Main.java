@@ -7,7 +7,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.SocketTimeoutException;
-import java.nio.Buffer;
+import java.lang.Thread;
 
 public class Main {
     // CONSTANTES
@@ -78,6 +78,7 @@ public class Main {
 
                 fallo = false;
                 motivo = "";
+                desconectado = false;
 
                 try {
                     respuesta = entrada.readLine();
@@ -86,10 +87,10 @@ public class Main {
                         fallo = true;
                         motivo = "Engine desconectado";
                         desconectado = true;
-                    } else if(respuesta == "KO") {
+                    } else if(respuesta == KO) {
                         fallo = true;
-                        motivo = "KO";
-                    } else if(respuesta == "OK") {
+                        motivo = KO;
+                    } else if(respuesta == OK) {
                         fallo = false;
                     } else {
                         fallo = true;
@@ -108,13 +109,29 @@ public class Main {
                 if(fallo && !averia) {
                     averia = true;
                     System.out.println("Averia detectada (" + motivo + ")");
-
+                    enviarCentral(ipCentral, puertoCentral, "LEAK#" + idWS);
+                } else if(fallo && averia) {
+                    averia = false;
+                    System.out.println("Averia resuelta");
+                    enviarCentral(ipCentral, puertoCentral, "LEAK_FIXED#" + idWS);
                 }
+
+                // Si el engine se ha desconectado, salir del bucle
+                if(desconectado) {
+                    break;
+                }
+
+                // Se espera el tiempo del periodo
+                Thread.sleep(PERIODO_MS);
             }
         } catch(IOException e) {
             System.out.println("Error con el engine");
             return;
+        } catch(InterruptedException e) {
+            return;
         }
+
+        System.out.println("Engine desconectado, esperando al siguiente...");
     }
 
     public static void main(String[] args) {
