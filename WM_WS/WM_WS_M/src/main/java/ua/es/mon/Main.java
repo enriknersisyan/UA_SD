@@ -1,4 +1,5 @@
-<<<<<<< HEAD:WM_WS/WM_WS_M/src/main/java/Main.java
+package ua.es.mon;
+
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.io.BufferedReader;
@@ -6,10 +7,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.SocketTimeoutException;
-=======
-package ua.es.mon;
-
->>>>>>> develop:WM_WS/WM_WS_M/src/main/java/ua/es/mon/Main.java
+import java.nio.Buffer;
 
 public class Main {
     // CONSTANTES
@@ -20,38 +18,103 @@ public class Main {
     private static int TIMEOUT_CENTRAL_MS = 3000;
     private static int PERIODO_MS = 1000;
 
-    // Función para registrar al monitor en la central
-    private static boolean registrar(String ip, int puerto, String id) {
-        // Mensaje que espera recibir de la central
-        String msg;
-
-        // Se debe conectar a la central
+    // Función para enviar información a central
+    private static String enviarCentral(String ip, int puerto, String mensaje) {
         try(Socket s = new Socket(ip, puerto)) {
             BufferedReader entrada = new BufferedReader(new InputStreamReader(s.getInputStream()));
             PrintWriter salida = new PrintWriter(s.getOutputStream(), true);
 
             // Se añade un tiempo de timeout
             s.setSoTimeout(TIMEOUT_CENTRAL_MS);
-            salida.println("REGISTER#" + id);
-            msg = entrada.readLine();
-        } catch(SocketTimeoutException e) {
-            System.out.println("Error: no se puede conectar a la central");
-            return false;
+            salida.println(mensaje);
+            return entrada.readLine();
+        } catch(SocketTimeoutException e) {     
+            return null;
         } catch(IOException e) {
-            System.out.println("Error: no se puede conectar a Central");
-            return false;
-        }
-
-        if(msg != "OK") {
-            return false;
-        } else {
-            return true;
+            return null;
         }
     }
 
-    // Función para gestionar un engine cuando llega
-    private static void gestionarEngine(Socket s, String ipCentral, int puertoCentral, String idWS) {
+    // Función para registrar al monitor en la central
+    private static boolean registrar(String ip, int puerto, String id) {
+        // Mensaje que espera recibir de la central
+        String msg;
 
+        // Se debe conectar a la central
+        msg = enviarCentral(ip, puerto,"REGISTER#" + id);
+
+        if(msg == null) {
+            System.out.println("Error: no se puede conectar a la central");
+            return false;
+        } else if(msg != "OK") {
+            System.out.println("Error: Central ha rechazado el registro");
+            return false;
+        }
+
+        return true;
+    }
+
+    // Función para gestionar un engine cuando llega
+    private static void gestionarEngine(Socket sEngine, String ipCentral, int puertoCentral, String idWS) {
+        // Cada engine empieza sin fallos
+        boolean averia = false;
+
+        try(Socket s = sEngine) {
+            System.out.println("Engine conectado.");
+
+            BufferedReader entrada = new BufferedReader(new InputStreamReader(s.getInputStream()));
+            PrintWriter salida = new PrintWriter(s.getOutputStream(), true);
+
+            salida.println("ASSIGN#" + idWS);
+            s.setSoTimeout(TIMEOUT_ENGINE_MS);
+
+            // Bucle interno
+            boolean fallo;
+            String motivo;
+            String respuesta;
+            boolean desconectado;
+            for(;;) {
+                salida.println(PING);
+
+                fallo = false;
+                motivo = "";
+
+                try {
+                    respuesta = entrada.readLine();
+                   
+                    if(respuesta == null) {
+                        fallo = true;
+                        motivo = "Engine desconectado";
+                        desconectado = true;
+                    } else if(respuesta == "KO") {
+                        fallo = true;
+                        motivo = "KO";
+                    } else if(respuesta == "OK") {
+                        fallo = false;
+                    } else {
+                        fallo = true;
+                        motivo = "Respuesta desconocida";
+                    }
+                } catch(SocketTimeoutException e) {
+                    fallo = true;
+                    motivo = "Sin respuesta(timeout)";
+                } catch(IOException e) {
+                    fallo = true;
+                    motivo = "Engine desconectado";
+                    desconectado = true;
+                }
+
+                // Solo actua cuando cambia el estado
+                if(fallo && !averia) {
+                    averia = true;
+                    System.out.println("Averia detectada (" + motivo + ")");
+
+                }
+            }
+        } catch(IOException e) {
+            System.out.println("Error con el engine");
+            return;
+        }
     }
 
     public static void main(String[] args) {
