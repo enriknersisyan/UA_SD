@@ -11,12 +11,13 @@ import java.lang.Thread;
 
 public class Main {
     // CONSTANTES
-    private static String PING = "PING";
-    private static String OK = "OK";
-    private static String KO = "KO";
-    private static int TIMEOUT_ENGINE_MS = 2000;
-    private static int TIMEOUT_CENTRAL_MS = 3000;
-    private static int PERIODO_MS = 1000;
+    private static final String PING = "PING";
+    private static final String OK = "OK";
+    private static final String KO = "KO";
+    private static final int TIMEOUT_ENGINE_MS = 2000;
+    private static final int TIMEOUT_CENTRAL_MS = 3000;
+    private static final int PERIODO_MS = 1000;
+    private static boolean averia = false; // De esta manera, el valor se mantiene entre engines
 
     // Función para enviar información a central
     private static String enviarCentral(String ip, int puerto, String mensaje) {
@@ -44,9 +45,9 @@ public class Main {
         msg = enviarCentral(ip, puerto,"REGISTER#" + id);
 
         if(msg == null) {
-            System.out.println("Error: no se puede conectar a la central");
+            System.out.println("Error: no se puede conectar a Central");
             return false;
-        } else if(msg != "OK") {
+        } else if(!OK.equals(msg)) {
             System.out.println("Error: Central ha rechazado el registro");
             return false;
         }
@@ -56,9 +57,6 @@ public class Main {
 
     // Función para gestionar un engine cuando llega
     private static void gestionarEngine(Socket sEngine, String ipCentral, int puertoCentral, String idWS) {
-        // Cada engine empieza sin fallos
-        boolean averia = false;
-
         try(Socket s = sEngine) {
             System.out.println("Engine conectado.");
 
@@ -87,10 +85,10 @@ public class Main {
                         fallo = true;
                         motivo = "Engine desconectado";
                         desconectado = true;
-                    } else if(respuesta == KO) {
+                    } else if(KO.equals(respuesta)) {
                         fallo = true;
                         motivo = KO;
-                    } else if(respuesta == OK) {
+                    } else if(OK.equals(respuesta)) {
                         fallo = false;
                     } else {
                         fallo = true;
@@ -108,12 +106,21 @@ public class Main {
                 // Solo actua cuando cambia el estado
                 if(fallo && !averia) {
                     averia = true;
-                    System.out.println("Averia detectada (" + motivo + ")");
-                    enviarCentral(ipCentral, puertoCentral, "LEAK#" + idWS);
-                } else if(fallo && averia) {
+                    System.out.println("Avería detectada (" + motivo + ")");
+                    
+                    // Se debe comprobar la respuesta de la central
+                    if(enviarCentral(ipCentral, puertoCentral, "LEAK#" + idWS) == null) {
+                        System.out.println("Aviso: Central no responde.");
+                    }
+
+                } else if(!fallo && averia) {
                     averia = false;
-                    System.out.println("Averia resuelta");
-                    enviarCentral(ipCentral, puertoCentral, "LEAK_FIXED#" + idWS);
+                    System.out.println("Avería resuelta");
+    
+                    // Se debe comprobar la respuesta de la central
+                    if(enviarCentral(ipCentral, puertoCentral, "LEAK_FIXED#" + idWS) == null) {
+                        System.out.println("Aviso: Central no responde.");
+                    }
                 }
 
                 // Si el engine se ha desconectado, salir del bucle
