@@ -1,5 +1,9 @@
 import java.net.Socket;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.SocketTimeoutException;
 
 public class Main {
     // CONSTANTES
@@ -15,16 +19,27 @@ public class Main {
         // Mensaje que espera recibir de la central
         String msg;
 
-
         // Se debe conectar a la central
         try(Socket s = new Socket(ip, puerto)) {
-            
+            BufferedReader entrada = new BufferedReader(new InputStreamReader(s.getInputStream()));
+            PrintWriter salida = new PrintWriter(s.getOutputStream(), true);
+
+            // Se añade un tiempo de timeout
+            s.setSoTimeout(TIMEOUT_CENTRAL_MS);
+            salida.println("REGISTER#" + id);
+            msg = entrada.readLine();
         } catch(SocketTimeoutException e) {
             System.out.println("Error: no se puede conectar a la central");
             return false;
         } catch(IOException e) {
             System.out.println("Error: no se puede conectar a Central");
             return false;
+        }
+
+        if(msg != "OK") {
+            return false;
+        } else {
+            return true;
         }
     }
 
