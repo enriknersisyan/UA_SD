@@ -13,7 +13,7 @@
 	<artifactId>wm-central</artifactId>
 
 	<properties>
-		<main.class>com.wm.central.Main</main.class>
+		<main.class>ua.es.central.Main</main.class>
 	</properties>
 
 	<dependencies>

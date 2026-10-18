@@ -1,4 +1,4 @@
-package com.wm.central;
+package ua.es.central;
 
 public class Main {
     public static void main(String[] args) {

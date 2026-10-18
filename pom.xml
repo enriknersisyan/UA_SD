@@ -10,7 +10,7 @@
     <packaging>pom</packaging>
 
     <modules>
-        <!-- <module>WM_Central</module>  descomentar cuando exista su pom -->
+        <module>WM_Central</module>
         <module>WM_FO</module>
         <module>WM_WS</module>
     </modules>

@@ -13,7 +13,7 @@
     <artifactId>wm-ws-e</artifactId>
 
     <properties>
-        <main.class>Main</main.class>
+        <main.class>ua.es.engine.Main</main.class>
     </properties>
 
     <dependencies>
