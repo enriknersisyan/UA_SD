@@ -2,3 +2,4 @@
 target/
 /wm_central.db
 *.basedatos
+.vscode/
