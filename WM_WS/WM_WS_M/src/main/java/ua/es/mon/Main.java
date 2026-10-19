@@ -1,13 +1,13 @@
 package ua.es.mon;
 
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
+import java.net.SocketTimeoutException;
 import java.net.Socket;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.net.SocketTimeoutException;
-import java.lang.Thread;
 
 public class Main {
     // CONSTANTES
@@ -16,28 +16,33 @@ public class Main {
     private static final String KO = "KO";
     private static final int TIMEOUT_ENGINE_MS = 2000;
     private static final int TIMEOUT_CENTRAL_MS = 3000;
+    private static final int REINTENTO_MS = 3000;
     private static final int PERIODO_MS = 1000;
     private static boolean averia = false; // De esta manera, el valor se mantiene entre engines
+    
+    // Enum para diferenciar las distintas respuestas posibles de la central
+    public enum RESPUESTA {OK, KO, SIN_RESPUESTA}
 
     // Función para enviar información a central
     private static String enviarCentral(String ip, int puerto, String mensaje) {
-        try(Socket s = new Socket(ip, puerto)) {
-            BufferedReader entrada = new BufferedReader(new InputStreamReader(s.getInputStream()));
-            PrintWriter salida = new PrintWriter(s.getOutputStream(), true);
-
+        try(Socket s = new Socket()) {
+            s.connect(new InetSocketAddress(ip, puerto), TIMEOUT_CENTRAL_MS);
+            
             // Se añade un tiempo de timeout
             s.setSoTimeout(TIMEOUT_CENTRAL_MS);
+
+            BufferedReader entrada = new BufferedReader(new InputStreamReader(s.getInputStream()));
+            PrintWriter salida = new PrintWriter(s.getOutputStream(), true);
+            
             salida.println(mensaje);
             return entrada.readLine();
-        } catch(SocketTimeoutException e) {     
-            return null;
         } catch(IOException e) {
             return null;
         }
     }
 
     // Función para registrar al monitor en la central
-    private static boolean registrar(String ip, int puerto, String id) {
+    private static RESPUESTA registrar(String ip, int puerto, String id) {
         // Mensaje que espera recibir de la central
         String msg;
 
@@ -46,13 +51,13 @@ public class Main {
 
         if(msg == null) {
             System.out.println("Error: no se puede conectar a Central");
-            return false;
+            return RESPUESTA.SIN_RESPUESTA;
         } else if(!OK.equals(msg)) {
             System.out.println("Error: Central ha rechazado el registro");
-            return false;
+            return RESPUESTA.KO;
         }
 
-        return true;
+        return RESPUESTA.OK;
     }
 
     // Función para gestionar un engine cuando llega
@@ -96,7 +101,8 @@ public class Main {
                     }
                 } catch(SocketTimeoutException e) {
                     fallo = true;
-                    motivo = "Sin respuesta(timeout)";
+                    motivo = "Sin respuesta (timeout)";
+                    desconectado = true;
                 } catch(IOException e) {
                     fallo = true;
                     motivo = "Engine desconectado";
@@ -163,8 +169,19 @@ public class Main {
         String ipCentral = args[1];
         String idWS = args[3];
 
-        // Se debe registrar en la central, para ello se conecta y espera respuesta
-        if(!registrar(ipCentral, puertoCentral, idWS)) {
+        RESPUESTA resp = RESPUESTA.SIN_RESPUESTA; // Se inicializa para evitar problemas de compilación
+        try {
+            // Se debe registrar en la central, para ello se conecta y espera respuesta
+            while((resp = registrar(ipCentral, puertoCentral, idWS)).equals(RESPUESTA.SIN_RESPUESTA)) {
+                System.out.println("Reintentando en 3 s...");
+                Thread.sleep(REINTENTO_MS);
+            }
+        } catch(InterruptedException e) {
+            return;
+        }
+
+        // Se debe comprobar si la central ha rechazado
+        if(resp.equals(RESPUESTA.KO)) {
             return;
         }
 
