@@ -1,2 +1,4 @@
 ﻿.vs/
 target/
+/wm_central.db
+*.basedatos
