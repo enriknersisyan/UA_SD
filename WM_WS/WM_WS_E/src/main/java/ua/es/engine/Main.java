@@ -5,7 +5,7 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.Properties;
-
+import java.util.Scanner;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -86,7 +86,13 @@ public class Main {
         }
     }
     
-    
+    // Función auxiliar para mostrar el menú
+    private static void menu() {
+        Scanner sc = new Scanner(System.in);
+        String entradaUsr = sc.nextLine();
+
+        for(;;) {ç}
+    }
 
     public static void main(String[] args) {
         // Se debe comprobar el número de argumentos
