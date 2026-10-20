@@ -4,6 +4,13 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.Properties;
+
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.serialization.StringSerializer;
+
 import java.io.IOException;
 import java.lang.Thread;
 
@@ -20,6 +27,9 @@ public class Main {
 
     // Estado compartido(usado por los hilos)
     private static final Object obj = new Object();
+
+    // Declaración de productor
+    private static KafkaProducer<String, String> productor;
 
     // Variables usadas por varios hilos
     private static volatile String idWS = null;
@@ -75,9 +85,58 @@ public class Main {
             Thread.sleep(REINTENTO_MS);
             } catch(InterruptedException e) {}
         }
-    }   
+    }
+    
+    
 
     public static void main(String[] args) {
-        System.out.println("WM_WS_E");
+        // Se debe comprobar el número de argumentos
+        if(args.length != 4) {
+            System.out.println("Uso: java -jar WM_WS_E.jar <ipBroker> <puertoBroker> <ipMonitor> <puertoMonitor>");
+            return;
+        }
+
+        // Se debe comprobar que los puertos introducidos sean enteros
+        int puertoBroker, puertoMonitor;
+        try {
+            puertoBroker = Integer.parseInt(args[1]);
+            puertoMonitor = Integer.parseInt(args[3]);
+        } catch(NumberFormatException e) {
+            System.out.println("Error: puerto no válido");
+            return;
+        }
+
+        String ipBroker = args[0];
+        String ipMonitor = args[2];
+
+        // Se crea el productor
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, ipBroker + ":" + puertoBroker);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        productor = new KafkaProducer<>(props);
+
+        // Se cierra el productor al apagar el Engine (Ctrl+C)
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> productor.close()));
+
+        // Se lanza el hilo que se conecta al monitor
+        new Thread(() -> hiloMonitor(ipMonitor, puertoMonitor)).start();
+
+        // Se espera a recibir el ID del monitor
+        while(idWS == null) {
+            try {
+                Thread.sleep(100);
+            } catch(InterruptedException e) {
+                return;
+            }
+        }    
+
+        System.out.println("Engine asignado a " + idWS);
+
+        // Se lanza el hilo de kafka
+        // new Thread(() -> hiloKafka(ipBroker, puertoBroker)).start();
+
+        // El hilo principal se queda en el menú
+        // menu()
     }
 }

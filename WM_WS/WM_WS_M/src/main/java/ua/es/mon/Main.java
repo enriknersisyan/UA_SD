@@ -154,10 +154,10 @@ public class Main {
             return;
         }
 
-        int puertoMonitor;
-        int puertoCentral;
+        
 
         // Se debe comprobar que los puertos introducidos sean números enteros
+        int puertoMonitor, puertoCentral;
         try {
             puertoMonitor = Integer.parseInt(args[0]);
             puertoCentral = Integer.parseInt(args[2]);
