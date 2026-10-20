@@ -1,15 +1,16 @@
 package ua.es.central;
 import java.sql.SQLException;
 
-
 import ua.es.central.basedatos.Database;
 import ua.es.central.basedatos.EstacionBD;
 import ua.es.central.basedatos.OperarioBD;
 import ua.es.central.modelo.Estacion;
 import ua.es.central.modelo.Estado;
 
+import ua.es.central.red.ServidorSockets;
+import ua.es.central.logica.RegistroEstaciones;
+
 public class Main {
-    
     
     public static void main(String[] args) {
         // solo puede haber un argumento que es el puerto de sockets
@@ -35,20 +36,13 @@ public class Main {
             System.exit(1);
             return;
         }
+        RegistroEstaciones registro = new RegistroEstaciones();
         // Se abre la base de datos; si falla, Central no puede continuar.
         try {
             Database baseDatos = new Database();
             EstacionBD estaciones = new EstacionBD(baseDatos);
-            OperarioBD operarios = new OperarioBD(baseDatos);
+            registro.cargar(estaciones.listar());
 
-            estaciones.insertar(new Estacion("WS-01", "Parque Central", Estado.DESCONECTADA));
-            operarios.insertar("OP-01", "Operario Uno");
-
-            System.out.println("Estaciones: " + estaciones.listar());
-            System.out.println("Existe OP-01? " + operarios.existe("OP-01"));
-            System.out.println("Existe OP-99? " + operarios.existe("OP-99"));
-
-            baseDatos.cerrar();
         } catch (SQLException e) {
             System.out.println("Error con la base de datos: " + e.getMessage());
             System.exit(1);
@@ -56,7 +50,7 @@ public class Main {
     
         System.out.println("WM_Central arrancado");
         System.out.println("Puerto de sockets :" + socketPort);
-
-       
+        new ServidorSockets(socketPort, registro).arrancar();
+     
     }
 }
