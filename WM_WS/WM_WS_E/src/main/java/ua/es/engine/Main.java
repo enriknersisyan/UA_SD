@@ -8,7 +8,6 @@ import java.util.Properties;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.io.IOException;
@@ -116,7 +115,7 @@ public class Main {
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         productor = new KafkaProducer<>(props);
 
-        // Se cierra el productor al apagar el Engine (Ctrl+C)
+        // Se cierra el productor al apagar el Engine
         Runtime.getRuntime().addShutdownHook(new Thread(() -> productor.close()));
 
         // Se lanza el hilo que se conecta al monitor
