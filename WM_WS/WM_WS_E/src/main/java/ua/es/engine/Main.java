@@ -8,6 +8,7 @@ import java.util.Properties;
 import java.util.Scanner;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.io.IOException;
@@ -41,6 +42,11 @@ public class Main {
     private static int duracion = 0;
     private static double volumen = 0;
     private static long inicioRiego = 0;
+
+    // Kafka
+    private static final String TOPIC_ORDENES = "topicOrdenes";       // CENTRAL → Engine
+    private static final String TOPIC_EVENTOS = "topicEventos";       // Engine → CENTRAL
+    private static final String TOPIC_TELEMETRIA = "topicTelemetria"; // Engine → CENTRAL
 
     private static void hiloMonitor(String ipMonitor, int puertoMonitor) {
         // Si se pierde el monitor, se reintenta
@@ -104,7 +110,7 @@ public class Main {
             System.out.println("Posibles acciones:");
             System.out.println("[k] -> Simular/resolver avería");
             System.out.println("[r] -> Solicitar riego");
-            System.out.println("[s] -> Terminar");
+            System.out.println("[s] -> Terminar riego");
             entradaUsr = sc.nextLine();
 
             // Depende de la entrada, se realiza una acción u otra
@@ -138,11 +144,23 @@ public class Main {
                     continue; // Se vuelve al menú inicial
                 }
 
-                //productor.send(TOPIC_EVENTOS, idWS, "SOLICITUD_RIEGO#" + idWS + "#LOCAL#" + duracion);
-
-                // POR ACABAR
+                // Mandar solicitud de riego a la central
+                productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "SOLICITUD_RIEGO#" + idWS + "#LOCAL#" + duracion));
+                System.out.println("Solicitud enviada a CENTRAL, esperando autorización...");
+            } else if(entradaUsr.toLowerCase().equals("s")) {
+                if(estado.equals(ESTADO.REGANDO)) {
+                    // finalizarRiego("PARADA_MANUAL");
+                } else {
+                    System.out.println("No hay ningún riego en curso");
+                }
+            } else {
+                System.out.println("Opción no válida");
             }
         }
+    }
+
+    private static void hiloKafka(String ipBroker, int puertoBroker) {
+        
     }
 
     public static void main(String[] args) {
@@ -200,5 +218,5 @@ public class Main {
 /*
     COSAS A DESCOMENTAR
     - final main
-    - finalizarriego en menu()
+    - finalizarriego en menu() X2
 */
