@@ -138,7 +138,7 @@ public class Main {
                     continue; // Se vuelve al menú inicial
                 }
 
-                productor.send(TOPIC_EVENTOS, idWS, "SOLICITUD_RIEGO#" + idWS + "#LOCAL#" + duracion);
+                //productor.send(TOPIC_EVENTOS, idWS, "SOLICITUD_RIEGO#" + idWS + "#LOCAL#" + duracion);
 
                 // POR ACABAR
             }
