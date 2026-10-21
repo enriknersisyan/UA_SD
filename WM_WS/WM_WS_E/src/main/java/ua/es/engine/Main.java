@@ -4,15 +4,26 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.time.Duration;
 import java.util.Properties;
 import java.util.Scanner;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.serialization.StringSerializer;
+import java.util.ArrayList;
+import java.util.List;
 
 import java.io.IOException;
 import java.lang.Thread;
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
+
 
 public class Main {
     // Constantes
@@ -160,7 +171,92 @@ public class Main {
     }
 
     private static void hiloKafka(String ipBroker, int puertoBroker) {
-        
+        // Se crea el consumidor local, solo utilizado por este hilo
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, ipBroker + ":" + puertoBroker);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "engine-" + idWS); // grupo propio por cada engine
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+
+        try(KafkaConsumer<String, String> consumidor = new KafkaConsumer<>(props)) {
+            // Se suscribe a los topics
+            consumidor.subscribe(List.of(TOPIC_ORDENES));
+
+            for(;;) {
+                ConsumerRecords<String, String> mensajes = consumidor.poll(Duration.ofMillis(500));
+
+                for(ConsumerRecord<String, String> msg : mensajes) {
+                    // Se comprueba si la orden que acaba de llegar de Kafka es para esta estación
+                    if(!idWS.equals(msg.key())) {
+                        continue;
+                    }
+
+                    // Se obtienen los campos a partir del mensaje 
+                    String[] campos = msg.value().split("#");
+                    String accion = campos[0];
+
+                    // Si la central pide autorización
+                    if(accion.equals("AUTORIZACION")) {
+                        // De esta manera, si un hilo llega hasta este punto pero hay otro dentro,
+                        // el recién llegado espera la salida del actual para ejecutar el código
+                        synchronized(obj) {
+                            if(estado.equals(ESTADO.DISPONIBLE) && !averia) {
+                                String idOperario = campos[1];
+
+                                try {
+                                    int limiteSeg = Integer.parseInt(campos[2]);
+                                } catch(NumberFormatException e) {
+                                    System.out.println("El número introducido no es un entero");
+                                    continue;
+                                }
+
+                                estado = ESTADO.PENDIENTE_INICIO;
+                                productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "RESP_AUTORIZACION#" + idWS + "#OK"));
+                                System.out.println("Riego autorizado para " + idOperario + ", esperando inicio");
+                            } else {
+                                productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "RESP_AUTORIZACION#" + idWS + "#KO#" + estado));
+                                System.out.println("Autorización denegada (estado " + estado + ")");
+                            }
+                        }
+                    } else if(accion.equals("INICIAR")) { // Si la central pide iniciar
+                        synchronized(obj) {
+                            if(estado.equals(ESTADO.PENDIENTE_INICIO)) {
+                                //iniciarRiego()
+                            }
+                        }
+                    } else if(accion.equals("CANCELAR")) { // si la central pide cancelar
+                        synchronized(obj) {
+                            if(estado.equals(ESTADO.PENDIENTE_INICIO)) {
+                                estado = ESTADO.DISPONIBLE;
+                                System.out.println("Riego cancelado por CENTRAL");
+                            }
+                        }
+                    } else if(accion.equals("BLOQUEAR")) { // si la central pide bloquear
+                        synchronized(obj) {
+                            if(estado.equals(ESTADO.REGANDO) || estado.equals(ESTADO.PENDIENTE_INICIO)) {
+                            // finalizarRiego("BLOQUEO_CENTRAL")
+                            }
+
+                            estado = ESTADO.FUERA_SERVICIO;
+                        } 
+                        productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "ESTADO#" + idWS + "#FUERA_SERVICIO"));
+                        System.out.println("FUERA DE SERVICIO por orden de CENTRAL");
+                    } else if(accion.equals("ACTIVAR")) { // Si la central pide activar
+                        synchronized(obj) {
+                            if(!averia) {
+                                estado = ESTADO.DISPONIBLE;
+                            }
+                        }
+                        productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "ESTADO#" + idWS + "#" + estado));
+                        System.out.println("Estado actual: " + estado);
+                    } else {
+                        System.out.println("Accion desconocida: " + accion);
+                    }
+                }
+            }
+        } catch(KafkaException e) {
+            System.out.println("Error: No se puede conectar con Kafka");
+        }
     }
 
     public static void main(String[] args) {
@@ -219,4 +315,6 @@ public class Main {
     COSAS A DESCOMENTAR
     - final main
     - finalizarriego en menu() X2
+    - iniciarRIego() en hiloKafka()
+    - finalizarRiego() en ""
 */
