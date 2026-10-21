@@ -7,11 +7,9 @@ import java.net.Socket;
 import java.time.Duration;
 import java.util.Properties;
 import java.util.Scanner;
-import java.util.ArrayList;
 import java.util.List;
-
 import java.io.IOException;
-import java.lang.Thread;
+
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -47,10 +45,11 @@ public class Main {
     private static volatile ESTADO estado = ESTADO.DISPONIBLE;
     private static volatile boolean averia = false;
     private static volatile boolean riego = false;
+    private static volatile boolean bloqueada = false;
 
     // Datos del riego en curso
     private static  String idOperario = "";
-    private static int duracion = 0;
+    private static int limiteSeg = 0;
     private static double volumen = 0;
     private static long inicioRiego = 0;
 
@@ -99,22 +98,26 @@ public class Main {
                 }
 
             Thread.sleep(REINTENTO_MS);
-            } catch(InterruptedException e) {}
+            } catch(InterruptedException e) {
+                return;
+            }
         }
     }
     
     // Función auxiliar para mostrar el menú
     private static void menu() {
         Scanner sc = new Scanner(System.in);
-        String entradaUsr = sc.nextLine();
+        String entradaUsr;
 
         for(;;) {
             System.out.println("===== WS " + idWS + " =====");
             System.out.println("Estado: " + estado);
 
             // Si está regando, se muestra la información del riego
-            if(estado.equals(ESTADO.REGANDO)) {
-                System.out.println("Operario: " + idOperario + " Volumen: " + volumen + " L");
+            synchronized(obj) {
+                if(estado.equals(ESTADO.REGANDO)) {
+                    System.out.println("Operario: " + idOperario + " Volumen: " + volumen + " L");
+                }
             }
 
             // Se muestran las posibles acciones
@@ -142,12 +145,17 @@ public class Main {
                         estado = ESTADO.FUGA;
                     } else {
                         System.out.println("Averia resuelta");
-                        estado = ESTADO.DISPONIBLE;
+                        if(bloqueada) {
+                            estado = ESTADO.FUERA_SERVICIO;
+                        } else {
+                            estado = ESTADO.DISPONIBLE;
+                        }
                     }
                 }
             } else if(entradaUsr.toLowerCase().equals("r")) {
                 System.out.println("Introduzca la duración(s): ");
 
+                int duracion;
                 try {
                     duracion = Integer.parseInt(sc.nextLine());
                 } catch(NumberFormatException e) {
@@ -201,12 +209,16 @@ public class Main {
                         // el recién llegado espera la salida del actual para ejecutar el código
                         synchronized(obj) {
                             if(estado.equals(ESTADO.DISPONIBLE) && !averia) {
-                                String idOperario = campos[1];
-
                                 try {
-                                    int limiteSeg = Integer.parseInt(campos[2]);
+                                    limiteSeg = Integer.parseInt(campos[2]);
+                                    idOperario = campos[1];
                                 } catch(NumberFormatException e) {
-                                    System.out.println("El número introducido no es un entero");
+                                    System.out.println("Número no válido");
+                                    productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "RESP_AUTORIZACION#" + idWS + "#KO#MENSAJE_INVALIDO"));
+                                    continue;
+                                } catch(ArrayIndexOutOfBoundsException e) {
+                                    System.out.println("Mensaje AUTORIZACION mal formado: " + msg.value());
+                                    productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "RESP_AUTORIZACION#" + idWS + "#KO#MENSAJE_INVALIDO"));
                                     continue;
                                 }
 
@@ -232,23 +244,33 @@ public class Main {
                             }
                         }
                     } else if(accion.equals("BLOQUEAR")) { // si la central pide bloquear
+                        String estadoActual;
                         synchronized(obj) {
                             if(estado.equals(ESTADO.REGANDO) || estado.equals(ESTADO.PENDIENTE_INICIO)) {
                             // finalizarRiego("BLOQUEO_CENTRAL")
                             }
 
-                            estado = ESTADO.FUERA_SERVICIO;
-                        } 
-                        productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "ESTADO#" + idWS + "#FUERA_SERVICIO"));
-                        System.out.println("FUERA DE SERVICIO por orden de CENTRAL");
-                    } else if(accion.equals("ACTIVAR")) { // Si la central pide activar
-                        synchronized(obj) {
+                            bloqueada = true;
                             if(!averia) {
+                                estado = ESTADO.FUERA_SERVICIO;
+                            }
+                            estadoActual = estado.toString();
+                        }
+                        productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "ESTADO#" + idWS + "#" + estadoActual));
+                        System.out.println("Bloqueo recibido. Estado actual: " + estadoActual);
+                    } else if(accion.equals("ACTIVAR")) { // Si la central pide activar
+                        String estadoActual;
+                        synchronized(obj) {
+                            bloqueada = false;
+                            if(averia) {
+                                estado = ESTADO.FUGA;
+                            } else if(estado.equals(ESTADO.FUERA_SERVICIO)) {
                                 estado = ESTADO.DISPONIBLE;
                             }
+                            estadoActual = estado.toString();
                         }
-                        productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "ESTADO#" + idWS + "#" + estado));
-                        System.out.println("Estado actual: " + estado);
+                        productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "ESTADO#" + idWS + "#" + estadoActual));
+                        System.out.println("Estado actual: " + estadoActual);
                     } else {
                         System.out.println("Accion desconocida: " + accion);
                     }
@@ -301,7 +323,7 @@ public class Main {
             }
         }    
 
-        System.out.println("Engine asignado a " + idWS);
+        System.out.println("Engine asignado a WS " + idWS);
 
         // Se lanza el hilo de kafka
         // new Thread(() -> hiloKafka(ipBroker, puertoBroker)).start();
