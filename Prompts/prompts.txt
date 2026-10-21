@@ -1,1 +1,2 @@
 - Ayudame a generar los pom.xml de cada carpeta.
+- Ayudame a crear el productor y consumidor en WM_WS_E

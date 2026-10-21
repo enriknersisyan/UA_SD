@@ -154,10 +154,10 @@ public class Main {
             return;
         }
 
-        int puertoMonitor;
-        int puertoCentral;
+        
 
         // Se debe comprobar que los puertos introducidos sean números enteros
+        int puertoMonitor, puertoCentral;
         try {
             puertoMonitor = Integer.parseInt(args[0]);
             puertoCentral = Integer.parseInt(args[2]);
@@ -169,24 +169,25 @@ public class Main {
         String ipCentral = args[1];
         String idWS = args[3];
 
-        RESPUESTA resp = RESPUESTA.SIN_RESPUESTA; // Se inicializa para evitar problemas de compilación
-        try {
-            // Se debe registrar en la central, para ello se conecta y espera respuesta
-            while((resp = registrar(ipCentral, puertoCentral, idWS)).equals(RESPUESTA.SIN_RESPUESTA)) {
-                System.out.println("Reintentando en 3 s...");
-                Thread.sleep(REINTENTO_MS);
-            }
-        } catch(InterruptedException e) {
-            return;
-        }
-
-        // Se debe comprobar si la central ha rechazado
-        if(resp.equals(RESPUESTA.KO)) {
-            return;
-        }
-
         // Se abre el servidor para el engine 
         try(ServerSocket ss = new ServerSocket(puertoMonitor)) {
+            RESPUESTA resp = RESPUESTA.SIN_RESPUESTA; // Se inicializa para evitar problemas de compilación
+            
+            try {
+                // Se debe registrar en la central, para ello se conecta y espera respuesta
+                while((resp = registrar(ipCentral, puertoCentral, idWS)).equals(RESPUESTA.SIN_RESPUESTA)) {
+                    System.out.println("Reintentando en 3 s...");
+                    Thread.sleep(REINTENTO_MS);
+                }
+            } catch(InterruptedException e) {
+                return;
+            }
+
+            // Se debe comprobar si la central ha rechazado
+            if(resp.equals(RESPUESTA.KO)) {
+                return;
+            }
+
             System.out.println("Monitor " + idWS + " escuchando en el puerto " + puertoMonitor);
 
             //Bucle para esperar engines indefinidamente
