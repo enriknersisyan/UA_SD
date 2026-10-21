@@ -38,7 +38,7 @@ public class Main {
 
     // Datos del riego en curso
     private static  String idOperario = "";
-    private static int limiteSeg = 0;
+    private static int duracion = 0;
     private static double volumen = 0;
     private static long inicioRiego = 0;
 
@@ -91,7 +91,58 @@ public class Main {
         Scanner sc = new Scanner(System.in);
         String entradaUsr = sc.nextLine();
 
-        for(;;) {ç}
+        for(;;) {
+            System.out.println("===== WS " + idWS + " =====");
+            System.out.println("Estado: " + estado);
+
+            // Si está regando, se muestra la información del riego
+            if(estado.equals(ESTADO.REGANDO)) {
+                System.out.println("Operario: " + idOperario + " Volumen: " + volumen + " L");
+            }
+
+            // Se muestran las posibles acciones
+            System.out.println("Posibles acciones:");
+            System.out.println("[k] -> Simular/resolver avería");
+            System.out.println("[r] -> Solicitar riego");
+            System.out.println("[s] -> Terminar");
+            entradaUsr = sc.nextLine();
+
+            // Depende de la entrada, se realiza una acción u otra
+            if(entradaUsr.toLowerCase().equals("k")) {
+                // De esta manera, si un hilo llega hasta este punto pero hay otro dentro,
+                // el recién llegado espera la salida del actual para ejecutar el código
+                synchronized(obj) {
+                    // Se invierte el valor para simular la avería
+                    averia = !averia;
+
+                    // Se comprueba el nuevo valor
+                    if(averia) {
+                        System.out.println("Avería simulada");
+                        if(estado.equals(ESTADO.REGANDO) || estado.equals(ESTADO.PENDIENTE_INICIO)) {
+                            // finalizarRiego("FUGA");
+                        }
+
+                        estado = ESTADO.FUGA;
+                    } else {
+                        System.out.println("Averia resuelta");
+                        estado = ESTADO.DISPONIBLE;
+                    }
+                }
+            } else if(entradaUsr.toLowerCase().equals("r")) {
+                System.out.println("Introduzca la duración(s): ");
+
+                try {
+                    duracion = Integer.parseInt(sc.nextLine());
+                } catch(NumberFormatException e) {
+                    System.out.println("Duración no válida");
+                    continue; // Se vuelve al menú inicial
+                }
+
+                productor.send(TOPIC_EVENTOS, idWS, "SOLICITUD_RIEGO#" + idWS + "#LOCAL#" + duracion);
+
+                // POR ACABAR
+            }
+        }
     }
 
     public static void main(String[] args) {
@@ -145,3 +196,9 @@ public class Main {
         // menu()
     }
 }
+
+/*
+    COSAS A DESCOMENTAR
+    - final main
+    - finalizarriego en menu()
+*/
