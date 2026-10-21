@@ -139,7 +139,7 @@ public class Main {
                     if(averia) {
                         System.out.println("Avería simulada");
                         if(estado.equals(ESTADO.REGANDO) || estado.equals(ESTADO.PENDIENTE_INICIO)) {
-                            // finalizarRiego("FUGA");
+                            finalizarRiego("FUGA");
                         }
 
                         estado = ESTADO.FUGA;
@@ -168,7 +168,7 @@ public class Main {
                 System.out.println("Solicitud enviada a CENTRAL, esperando autorización...");
             } else if(entradaUsr.toLowerCase().equals("s")) {
                 if(estado.equals(ESTADO.REGANDO)) {
-                    // finalizarRiego("PARADA_MANUAL");
+                    finalizarRiego("PARADA_MANUAL");
                 } else {
                     System.out.println("No hay ningún riego en curso");
                 }
@@ -176,8 +176,10 @@ public class Main {
                 System.out.println("Opción no válida");
             }
         }
+        sc.close();
     }
 
+    // Función para gestionar el hilo de kafka
     private static void hiloKafka(String ipBroker, int puertoBroker) {
         // Se crea el consumidor local, solo utilizado por este hilo
         Properties props = new Properties();
@@ -233,7 +235,7 @@ public class Main {
                     } else if(accion.equals("INICIAR")) { // Si la central pide iniciar
                         synchronized(obj) {
                             if(estado.equals(ESTADO.PENDIENTE_INICIO)) {
-                                //iniciarRiego()
+                                iniciarRiego();
                             }
                         }
                     } else if(accion.equals("CANCELAR")) { // si la central pide cancelar
@@ -247,7 +249,7 @@ public class Main {
                         String estadoActual;
                         synchronized(obj) {
                             if(estado.equals(ESTADO.REGANDO) || estado.equals(ESTADO.PENDIENTE_INICIO)) {
-                            // finalizarRiego("BLOQUEO_CENTRAL")
+                                finalizarRiego("BLOQUEO_CENTRAL");
                             }
 
                             bloqueada = true;
@@ -281,8 +283,9 @@ public class Main {
         }
     }
 
+    // Función para que WS notifique a Central el fin del riego
     private static void finalizarRiego(String motivo) {
-        String msg; // Será utilizado posteriormente para almacenar el mensaje transmitido por el productor
+        String msg; // Será utilizado posteriormente para almacenar el mensaje que será transmitido por el productor
         
         // De esta manera, si un hilo llega hasta este punto pero hay otro dentro,
         // el recién llegado espera la salida del actual para ejecutar el código
@@ -314,6 +317,7 @@ public class Main {
         productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, msg));
     }
 
+    // Debido a que se llama siempre ya desde synchronized(obj), aqui no hace falta ponerlo
     private static void iniciarRiego() {
         estado = ESTADO.REGANDO;
         riego = true;
@@ -329,8 +333,47 @@ public class Main {
         new Thread(() -> hiloRiego()).start();
     }
 
+    // Manda información constante(cada segundo) a central sobre el riego
     private static void hiloRiego() {
+        while(riego) {
+            // Se calcula el caudal
+            double caudal = 8 + Math.random() * 7; // 8-15 L/min
 
+            // Se envia fuera para no bloquear a los demás hilos
+            double volumenActual;
+            String operario;
+            int limite;
+            long segundos;
+
+            // Se leen y se actualizan los datos compartidos con el syncrhonized(obj)
+            synchronized(obj) {
+                if(!riego) {
+                    break;
+                }
+
+                volumen += caudal / 60; // L/min
+
+                volumenActual = volumen;
+                operario = idOperario;
+                limite = limiteSeg;
+                segundos = (System.currentTimeMillis() - inicioRiego) / 1000;
+            }
+
+            // Se envia fuera para no bloquear a los demás hilos
+            productor.send(new ProducerRecord<>(TOPIC_TELEMETRIA, idWS, "TELEMETRIA#" + idWS + "#" + caudal + "#" + volumenActual + "#" + operario));
+
+            if(segundos >= limite) {
+                finalizarRiego("LIMITE_TIEMPO");
+                break;
+            }
+
+            // Se espera al siguiente segundo
+            try {
+                Thread.sleep(PERIODO_MS);
+            } catch(InterruptedException e) {
+                return;
+            }
+        }
     }
 
     public static void main(String[] args) {
@@ -378,17 +421,9 @@ public class Main {
         System.out.println("Engine asignado a WS " + idWS);
 
         // Se lanza el hilo de kafka
-        // new Thread(() -> hiloKafka(ipBroker, puertoBroker)).start();
+        new Thread(() -> hiloKafka(ipBroker, puertoBroker)).start();
 
         // El hilo principal se queda en el menú
-        // menu()
+        menu();
     }
 }
-
-/*
-    COSAS A DESCOMENTAR
-    - final main
-    - finalizarriego en menu() X2
-    - iniciarRIego() en hiloKafka()
-    - finalizarRiego() en ""
-*/
