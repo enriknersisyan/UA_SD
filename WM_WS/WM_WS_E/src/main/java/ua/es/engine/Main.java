@@ -281,6 +281,39 @@ public class Main {
         }
     }
 
+    private static void finalizarRiego(String motivo) {
+        String msg; // Será utilizado posteriormente para almacenar el mensaje transmitido por el productor
+        
+        // De esta manera, si un hilo llega hasta este punto pero hay otro dentro,
+        // el recién llegado espera la salida del actual para ejecutar el código
+        synchronized(obj) {
+            if(!riego && !estado.equals(ESTADO.PENDIENTE_INICIO)) {
+                return;
+            }
+
+            riego = false;
+            System.out.println("Cerrando electroválvula (" + motivo + ")");
+
+            long duracionReal = 0;
+            if(inicioRiego != 0) { // 0 = sin empezar
+                duracionReal = (System.currentTimeMillis() - inicioRiego) / 1000;
+            }
+
+            System.out.println("Resumen: " + volumen + " L en " + duracionReal + " s");
+            
+            inicioRiego = 0;
+
+            if(motivo.equals("LIMITE_TIEMPO") || motivo.equals("PARADA_MANUAL")) {
+                estado = ESTADO.DISPONIBLE;
+            }
+
+            msg = "FIN_RIEGO#" + idWS + "#" + idOperario + "#" + volumen + "#" + duracionReal + "#" + motivo;
+        }
+
+        // Se envia fuera para no bloquear a los demás hilos
+        productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, msg));
+    }
+
     public static void main(String[] args) {
         // Se debe comprobar el número de argumentos
         if(args.length != 4) {
