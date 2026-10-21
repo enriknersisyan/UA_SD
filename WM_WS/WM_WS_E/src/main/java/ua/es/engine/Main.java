@@ -314,6 +314,25 @@ public class Main {
         productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, msg));
     }
 
+    private static void iniciarRiego() {
+        estado = ESTADO.REGANDO;
+        riego = true;
+        volumen = 0;
+        inicioRiego = System.currentTimeMillis();
+
+        System.out.println("Abriendo electroválvula. Riego iniciado por " + idOperario);
+
+        // se manda la información de que el riego ha sido iniciado
+        productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "RIEGO_INICIADO#" + idWS + "#" + idOperario));
+
+        // El riego va en su propio hilo para no bloquear hiloKafka
+        new Thread(() -> hiloRiego()).start();
+    }
+
+    private static void hiloRiego() {
+
+    }
+
     public static void main(String[] args) {
         // Se debe comprobar el número de argumentos
         if(args.length != 4) {
