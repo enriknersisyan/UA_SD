@@ -154,8 +154,6 @@ public class Main {
             return;
         }
 
-        
-
         // Se debe comprobar que los puertos introducidos sean números enteros
         int puertoMonitor, puertoCentral;
         try {
