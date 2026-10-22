@@ -54,7 +54,7 @@ public class Main {
     private static long inicioRiego = 0;
     private static int numRiego = 0; // Para diferenciar los riegos
 
-    // Kafka
+    // Topics Kafka
     private static final String TOPIC_ORDENES = "topicOrdenes";       // CENTRAL → Engine
     private static final String TOPIC_EVENTOS = "topicEventos";       // Engine → CENTRAL
     private static final String TOPIC_TELEMETRIA = "topicTelemetria"; // Engine → CENTRAL
