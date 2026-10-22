@@ -18,26 +18,87 @@ public class Main {
     private static final int TIMEOUT_CENTRAL_MS = 3000;
     private static final int REINTENTO_MS = 3000;
     private static final int PERIODO_MS = 1000;
-    private static boolean averia = false; // De esta manera, el valor se mantiene entre engines
+    private static volatile boolean averia = false; // De esta manera, el valor se mantiene entre engines
+    private static final int LATIDO_MS = 2000;
+
+    // Conexión persistente con Central: mientras esté abierta, Central sabe que el monitor sigue vivo
+    private static Socket sCentral = null;
     
     // Enum para diferenciar las distintas respuestas posibles de la central
     public enum RESPUESTA {OK, KO, SIN_RESPUESTA}
 
     // Función para enviar información a central
-    private static String enviarCentral(String ip, int puerto, String mensaje) {
-        try(Socket s = new Socket()) {
-            s.connect(new InetSocketAddress(ip, puerto), TIMEOUT_CENTRAL_MS);
-            
-            // Se añade un tiempo de timeout
-            s.setSoTimeout(TIMEOUT_CENTRAL_MS);
+    private static synchronized String enviarCentral(String ip, int puerto, String mensaje) {
+        // Si no hay conexión abierta, se abre una nueva
+        if(sCentral == null) {
+            try {
+                Socket s = new Socket();
+                s.connect(new InetSocketAddress(ip, puerto), TIMEOUT_CENTRAL_MS);
 
-            BufferedReader entrada = new BufferedReader(new InputStreamReader(s.getInputStream()));
-            PrintWriter salida = new PrintWriter(s.getOutputStream(), true);
-            
+                // Se añade un tiempo de timeout
+                s.setSoTimeout(TIMEOUT_CENTRAL_MS);
+
+                sCentral = s;
+            } catch(IOException e) {
+                return null;
+            }
+
+            // Conexión nueva (p. ej. Central se reinició): hay que registrarse antes de enviar nada más
+            if(!mensaje.startsWith("REGISTER#")) {
+                String id = mensaje.split("#")[1];
+                if(!OK.equals(intercambiar("REGISTER#" + id))) {
+                    cerrarCentral();
+                    return null;
+                }
+                // Al registrarse, Central pone la WS en DISPONIBLE: si hay fuga, se vuelve a avisar
+                if(averia && !mensaje.startsWith("LEAK")) {
+                    intercambiar("LEAK#" + id);
+                }
+            }
+        }
+
+        return intercambiar(mensaje);
+    }
+
+    // Cierra la conexión con Central (si la hay)
+    private static synchronized void cerrarCentral() {
+        if(sCentral != null) {
+            try {
+                sCentral.close();
+            } catch(IOException e) {}
+            sCentral = null;
+        }
+    }
+
+    // Envía un mensaje por la conexión abierta y devuelve la respuesta (null si falla)
+    private static synchronized String intercambiar(String mensaje) {
+        try {
+            BufferedReader entrada = new BufferedReader(new InputStreamReader(sCentral.getInputStream()));
+            PrintWriter salida = new PrintWriter(sCentral.getOutputStream(), true);
+
             salida.println(mensaje);
-            return entrada.readLine();
+            String respuesta = entrada.readLine();
+            if(respuesta == null) {
+                cerrarCentral(); // Central ha cerrado la conexión
+            }
+            return respuesta;
         } catch(IOException e) {
+            cerrarCentral();
             return null;
+        }
+    }
+
+    // Función auxiliar que envia un latido periódico a Central para que sepa que está vivo
+    private static void latido(String ip, int puerto, String id) {
+        for(;;) {
+            try{
+                Thread.sleep(LATIDO_MS);
+            } catch(InterruptedException e) {
+                return;
+            }
+            if(enviarCentral(ip, puerto, "STATUS#" + id) == null) {
+                System.out.println("Aviso: Central no responde.");
+            }
         }
     }
 
@@ -185,6 +246,9 @@ public class Main {
             if(resp.equals(RESPUESTA.KO)) {
                 return;
             }
+
+            // Se lanza el latido para que Central sepa que el monitor sigue vivo
+            new Thread(() -> latido(ipCentral, puertoCentral, idWS)).start();
 
             System.out.println("Monitor " + idWS + " escuchando en el puerto " + puertoMonitor);
 
