@@ -52,6 +52,7 @@ public class Main {
     private static int limiteSeg = 0;
     private static double volumen = 0;
     private static long inicioRiego = 0;
+    private static int numRiego = 0; // Para diferenciar los riegos
 
     // Kafka
     private static final String TOPIC_ORDENES = "topicOrdenes";       // CENTRAL → Engine
@@ -109,74 +110,77 @@ public class Main {
         Scanner sc = new Scanner(System.in);
         String entradaUsr;
 
-        for(;;) {
-            System.out.println("===== WS " + idWS + " =====");
-            System.out.println("Estado: " + estado);
+        try {
+            for(;;) {
+                System.out.println("===== WS " + idWS + " =====");
+                System.out.println("Estado: " + estado);
 
-            // Si está regando, se muestra la información del riego
-            synchronized(obj) {
-                if(estado.equals(ESTADO.REGANDO)) {
-                    System.out.println("Operario: " + idOperario + " Volumen: " + volumen + " L");
-                }
-            }
-
-            // Se muestran las posibles acciones
-            System.out.println("Posibles acciones:");
-            System.out.println("[k] -> Simular/resolver avería");
-            System.out.println("[r] -> Solicitar riego");
-            System.out.println("[s] -> Terminar riego");
-            entradaUsr = sc.nextLine();
-
-            // Depende de la entrada, se realiza una acción u otra
-            if(entradaUsr.toLowerCase().equals("k")) {
-                // De esta manera, si un hilo llega hasta este punto pero hay otro dentro,
-                // el recién llegado espera la salida del actual para ejecutar el código
+                // Si está regando, se muestra la información del riego
                 synchronized(obj) {
-                    // Se invierte el valor para simular la avería
-                    averia = !averia;
-
-                    // Se comprueba el nuevo valor
-                    if(averia) {
-                        System.out.println("Avería simulada");
-                        if(estado.equals(ESTADO.REGANDO) || estado.equals(ESTADO.PENDIENTE_INICIO)) {
-                            finalizarRiego("FUGA");
-                        }
-
-                        estado = ESTADO.FUGA;
-                    } else {
-                        System.out.println("Averia resuelta");
-                        if(bloqueada) {
-                            estado = ESTADO.FUERA_SERVICIO;
-                        } else {
-                            estado = ESTADO.DISPONIBLE;
-                        }
+                    if(estado.equals(ESTADO.REGANDO)) {
+                        System.out.println("Operario: " + idOperario + " Volumen: " + volumen + " L");
                     }
                 }
-            } else if(entradaUsr.toLowerCase().equals("r")) {
-                System.out.println("Introduzca la duración(s): ");
 
-                int duracion;
-                try {
-                    duracion = Integer.parseInt(sc.nextLine());
-                } catch(NumberFormatException e) {
-                    System.out.println("Duración no válida");
-                    continue; // Se vuelve al menú inicial
-                }
+                // Se muestran las posibles acciones
+                System.out.println("Posibles acciones:");
+                System.out.println("[k] -> Simular/resolver avería");
+                System.out.println("[r] -> Solicitar riego");
+                System.out.println("[s] -> Terminar riego");
+                entradaUsr = sc.nextLine();
 
-                // Mandar solicitud de riego a la central
-                productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "SOLICITUD_RIEGO#" + idWS + "#LOCAL#" + duracion));
-                System.out.println("Solicitud enviada a CENTRAL, esperando autorización...");
-            } else if(entradaUsr.toLowerCase().equals("s")) {
-                if(estado.equals(ESTADO.REGANDO)) {
-                    finalizarRiego("PARADA_MANUAL");
+                // Depende de la entrada, se realiza una acción u otra
+                if(entradaUsr.toLowerCase().equals("k")) {
+                    // De esta manera, si un hilo llega hasta este punto pero hay otro dentro,
+                    // el recién llegado espera la salida del actual para ejecutar el código
+                    synchronized(obj) {
+                        // Se invierte el valor para simular la avería
+                        averia = !averia;
+
+                        // Se comprueba el nuevo valor
+                        if(averia) {
+                            System.out.println("Avería simulada");
+                            if(estado.equals(ESTADO.REGANDO) || estado.equals(ESTADO.PENDIENTE_INICIO)) {
+                                finalizarRiego("FUGA");
+                            }
+
+                            estado = ESTADO.FUGA;
+                        } else {
+                            System.out.println("Averia resuelta");
+                            if(bloqueada) {
+                                estado = ESTADO.FUERA_SERVICIO;
+                            } else {
+                                estado = ESTADO.DISPONIBLE;
+                            }
+                        }
+                    }
+                } else if(entradaUsr.toLowerCase().equals("r")) {
+                    System.out.println("Introduzca la duración(s): ");
+
+                    int duracion;
+                    try {
+                        duracion = Integer.parseInt(sc.nextLine());
+                    } catch(NumberFormatException e) {
+                        System.out.println("Duración no válida");
+                        continue; // Se vuelve al menú inicial
+                    }
+
+                    // Mandar solicitud de riego a la central
+                    productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "SOLICITUD_RIEGO#" + idWS + "#LOCAL#" + duracion));
+                    System.out.println("Solicitud enviada a CENTRAL, esperando autorización...");
+                } else if(entradaUsr.toLowerCase().equals("s")) {
+                    if(estado.equals(ESTADO.REGANDO)) {
+                        finalizarRiego("PARADA_MANUAL");
+                    } else {
+                        System.out.println("No hay ningún riego en curso");
+                    }
                 } else {
-                    System.out.println("No hay ningún riego en curso");
+                    System.out.println("Opción no válida");
                 }
-            } else {
-                System.out.println("Opción no válida");
             }
-        }
-        sc.close();
+        } finally {
+            sc.close();
+        } 
     }
 
     // Función para gestionar el hilo de kafka
@@ -298,11 +302,13 @@ public class Main {
             System.out.println("Cerrando electroválvula (" + motivo + ")");
 
             long duracionReal = 0;
+            double volumenFinal = 0;
             if(inicioRiego != 0) { // 0 = sin empezar
                 duracionReal = (System.currentTimeMillis() - inicioRiego) / 1000;
+                volumenFinal = volumen;
             }
 
-            System.out.println("Resumen: " + volumen + " L en " + duracionReal + " s");
+            System.out.println("Resumen: " + volumenFinal + " L en " + duracionReal + " s");
             
             inicioRiego = 0;
 
@@ -310,7 +316,7 @@ public class Main {
                 estado = ESTADO.DISPONIBLE;
             }
 
-            msg = "FIN_RIEGO#" + idWS + "#" + idOperario + "#" + volumen + "#" + duracionReal + "#" + motivo;
+            msg = "FIN_RIEGO#" + idWS + "#" + idOperario + "#" + volumenFinal + "#" + duracionReal + "#" + motivo;
         }
 
         // Se envia fuera para no bloquear a los demás hilos
@@ -323,6 +329,8 @@ public class Main {
         riego = true;
         volumen = 0;
         inicioRiego = System.currentTimeMillis();
+        numRiego++;
+        int r = numRiego;
 
         System.out.println("Abriendo electroválvula. Riego iniciado por " + idOperario);
 
@@ -330,11 +338,11 @@ public class Main {
         productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "RIEGO_INICIADO#" + idWS + "#" + idOperario));
 
         // El riego va en su propio hilo para no bloquear hiloKafka
-        new Thread(() -> hiloRiego()).start();
+        new Thread(() -> hiloRiego(r)).start();
     }
 
     // Manda información constante(cada segundo) a central sobre el riego
-    private static void hiloRiego() {
+    private static void hiloRiego(int r) {
         while(riego) {
             // Se calcula el caudal
             double caudal = 8 + Math.random() * 7; // 8-15 L/min
@@ -347,7 +355,7 @@ public class Main {
 
             // Se leen y se actualizan los datos compartidos con el syncrhonized(obj)
             synchronized(obj) {
-                if(!riego) {
+                if(!riego || r != numRiego) {
                     break;
                 }
 
