@@ -5,6 +5,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Scanner;
 
@@ -251,6 +254,115 @@ public class Main {
         productor.send(new ProducerRecord<>(TOPIC_PETICIONES, idOperario, "SOLICITUD_RIEGO#" + idOperario + "#" + idWS + "#" + duracion));
         System.out.println("Solicitud de riego enviada a CENTRAL para " + idWS + " (" + duracion + " s)");
         return false;
+    }
+
+    private static void hiloArchivo(String ruta) {
+        List<String> lineas;
+
+        try {
+            lineas = Files.readAllLines(Path.of(ruta));
+        } catch(IOException e) {
+            System.out.println("No se puede abrir el archivo " + ruta);
+            archivoEnProceso = false;
+            return;
+        }
+
+        System.out.println("Se han cargado " + lineas.size() + " líneas");
+        
+        int completadas = 0;
+        int denegadas = 0;
+        int sinRespuesta = 0;
+
+        for(int i = 0; i < lineas.size(); i++) {
+            String linea = lineas.get(i).trim();
+
+            // Se comprueba si la linea está vacia o empieza por #
+            if(linea.isEmpty() || linea.startsWith("#")) {
+                continue;
+            }
+
+            String[] campos = linea.split("#");
+            String idWS;
+            int duracion;
+            try {
+                idWS = campos[0].trim();
+                duracion = Integer.parseInt(campos[1].trim());
+            } catch(NumberFormatException | ArrayIndexOutOfBoundsException e) {
+                System.out.println("Línea " + (i + 1) + " mal formada, se omite");
+                continue;
+            }
+            if(idWS.isEmpty() || duracion <= 0) {
+                System.out.println("Línea " + (i + 1) + " mal formada, se omite");
+                continue;
+            }
+
+            // Si hay una solicitud manual en curso, se espera a que termine
+            try {
+                while(!enviarSolicitud(idWS, duracion)) {
+                    Thread.sleep(1000);
+                }
+            } catch(InterruptedException e) {
+                archivoEnProceso = false;
+                return;
+            }
+
+            System.out.println("Solicitud de la línea " + (i + 1) + ": " + idWS + " durante " + duracion + " s");
+
+            String res = esperarConclusion();
+
+            if(res.equals("EXITO")) {
+                completadas++;
+                System.out.println("Línea " + (i + 1) + ": completada");
+            } else if(res.equals("FRACASO")) {
+                denegadas++;
+                System.out.println("Línea " + (i + 1) + ": denegada");
+            } else {
+                sinRespuesta++;
+                System.out.println("Línea " + (i + 1) + ": sin respuesta de CENTRAL");
+            }
+
+            synchronized(obj) {
+                solicitudEnCurso = false;
+            }
+
+            // Espera de 4 s antes de la siguiente
+            if(i < lineas.size() - 1) {
+                System.out.println("Esperando 4 segundos...");
+                try {
+                    Thread.sleep(ESPERA_MS);
+                } catch(InterruptedException e) {
+                    archivoEnProceso = false;
+                    return;
+                }
+            }
+        }
+
+        System.out.println("Archivo terminado: " + completadas + " completadas, " + denegadas + " denegadas, " + sinRespuesta + " sin respuesta");
+        archivoEnProceso = false;
+    }
+    
+    private static String esperarConclusion() {
+        // Espera hasta FIN_RIEGO, DENEGADO, o demasiado tiempo sin noticias
+        synchronized(obj) {
+            while(!concluida) {
+                long pasado = System.currentTimeMillis() - ultimoMensaje;
+
+                if(pasado >= MAX_ESPERA_MS) {
+                    System.out.println("CENTRAL no responde para " + wsSolicitud);
+                    concluida = true;
+                    resultado = "SIN_RESPUESTA";
+                    break;
+                }
+
+                try {
+                    obj.wait(1000);
+                } catch(InterruptedException e) {
+                    return "SIN_RESPUESTA";
+                }
+            }
+
+            return resultado;
+        }
     }
 
     public static void main(String[] args) {
