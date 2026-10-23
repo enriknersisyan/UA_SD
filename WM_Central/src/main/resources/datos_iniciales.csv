@@ -1,0 +1,9 @@
+# Datos iniciales de WM_Central. Formato: TIPO;id;dato
+# - ESTACION;id;ubicacion
+# - OPERARIO;id;nombre
+# Se insertan solo los que no existan en la BD (reiniciar no duplica nada).
+ESTACION;WS-01;River Park
+ESTACION;WS-02;Riverside Gardens
+ESTACION;WS-03;Central Park
+OPERARIO;FO-01;Operario Uno
+OPERARIO;FO-02;Operario Dos
