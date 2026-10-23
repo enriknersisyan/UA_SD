@@ -46,4 +46,24 @@ public class EstacionBD{
 			return resultado;		
 		}
 	}
+
+	public void actualizarEstado(String id, Estado estado) throws SQLException {
+		synchronized(conexion){
+			String sql = "UPDATE estacion SET estado = ? WHERE id = ?";
+			try(PreparedStatement ps = conexion.prepareStatement(sql)){
+				ps.setString(1, estado.name());
+				ps.setString(2, id);
+				ps.executeUpdate();
+			}
+		}
+	}
+	public void desconectarTodas() throws SQLException {
+		synchronized(conexion){
+			String sql = "UPDATE estacion SET estado = ?";
+			try(PreparedStatement ps = conexion.prepareStatement(sql)){
+				ps.setString(1, Estado.DESCONECTADA.name());
+				ps.executeUpdate();
+			}
+		}
+	}
 }
