@@ -15,9 +15,11 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
 public class Main {
@@ -365,11 +367,100 @@ public class Main {
         }
     }
 
-    public static void main(String[] args) {
+    // Menú del operario (hilo principal)
+    private static void menu() {
+        Scanner sc = new Scanner(System.in); // una sola vez, sin cerrar (cerraría System.in)
+
+        for(;;) {
+            System.out.println("===== FO " + idOperario + " =====");
+
+            // Si hay una solicitud en curso, se muestra
+            synchronized(obj) {
+                if(solicitudEnCurso && !concluida) {
+                    System.out.println("Solicitud en curso: " + wsSolicitud);
+                }
+            }
+
+            // Se muestran las posibles acciones
+            System.out.println("[1] -> Ver estaciones disponibles");
+            System.out.println("[2] -> Solicitar riego");
+            System.out.println("[3] -> Cargar solicitudes desde archivo");
+            System.out.println("[4] -> Salir");
+
+            String opcion = sc.nextLine().trim();
+
+            if(opcion.equals("1")) {
+                mostrarEstaciones();
+            } else if(opcion.equals("2")) {
+                solicitudManual(sc);
+            } else if(opcion.equals("3")) {
+                System.out.println("Ruta del archivo: ");
+                String ruta = sc.nextLine().trim();
+
+                if(archivoEnProceso) {
+                    System.out.println("Ya se está procesando un archivo");
+                } else {
+                    archivoEnProceso = true;
+                    new Thread(() -> hiloArchivo(ruta)).start(); // el menú no espera
+                }
+            } else if(opcion.equals("4")) {
+                System.out.println("Saliendo");
+                System.exit(0); // termina también los demás hilos y cierra el productor
+            } else {
+                System.out.println("Opción no válida");
+            }
+        }
+    }
+
+        public static void main(String[] args) {
         // Se debe comprobar el número de argumentos
         if(args.length < 3 || args.length > 4) {
             System.out.println("Uso: java -jar WM_FO.jar <ipBroker> <puertoBroker> <idOperario> [archivo]");
             return;
         }
+
+        // Se debe comprobar que el puerto introducido sea un entero
+        int puertoBroker;
+        try {
+            puertoBroker = Integer.parseInt(args[1]);
+        } catch(NumberFormatException e) {
+            System.out.println("Error: puerto no válido");
+            return;
+        }
+
+        String ipBroker = args[0];
+        idOperario = args[2];
+
+        // Se crea el productor
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, ipBroker + ":" + puertoBroker);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        productor = new KafkaProducer<>(props);
+
+        // Se cierra el productor al apagar el FO
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> productor.close()));
+
+        // Se lanza el hilo que recibe todo lo que llega de CENTRAL
+        new Thread(() -> hiloConsumidor(ipBroker, puertoBroker)).start();
+
+        // Se espera un momento para que lleguen los primeros estados
+        try {
+            Thread.sleep(1500);
+        } catch(InterruptedException e) {
+            return;
+        }
+
+        System.out.println("FO " + idOperario + " conectado");
+
+        // Archivo opcional pasado como argumento
+        if(args.length == 4) {
+            archivoEnProceso = true;
+            String ruta = args[3];
+            new Thread(() -> hiloArchivo(ruta)).start();
+        }
+
+        // El hilo principal se queda en el menú
+        menu();
     }
 }
