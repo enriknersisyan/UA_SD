@@ -4,12 +4,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.TreeMap;
 import java.time.Duration;
+import java.util.Scanner;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -159,6 +162,95 @@ public class Main {
             default:
                 return codigo; // motivo desconocido: se muestra tal cual
         }
+    }
+
+    // Muestra todas las estaciones conocidas y su estado 
+    private static void mostrarEstaciones() {
+        Map<String, String[]> copia;
+
+        // Se copia la tabla con el lock y se muestra fuera, para no bloquear al consumidor
+        synchronized(obj) {
+            copia = new TreeMap<>(estaciones); // TreeMap: ordenada por idWS
+        }
+
+        if(copia.isEmpty()) {
+            System.out.println("Todavía no se ha recibido el estado de ninguna estación");
+            return;
+        }
+
+        System.out.println(String.format("%-8s | %-20s | %s", "ID", "Ubicación", "Estado"));
+        System.out.println("---------+----------------------+----------------");
+
+        for(Map.Entry<String, String[]> e : copia.entrySet()) {
+            String idWS = e.getKey();
+            String ubicacion = e.getValue()[0];
+            String estado = e.getValue()[1];
+
+            String marca = estado.equals("DISPONIBLE") ? "  <-- disponible" : "";
+            System.out.println(String.format("%-8s | %-20s | %s%s", idWS, ubicacion, estado, marca));
+        }
+    }
+
+        // Solicita un riego de forma puntual en una WS (Field Operators, pág. 11)
+    private static void solicitudManual(Scanner sc) {
+        // Solo la comprobación va con el lock; leer del teclado NUNCA con el lock cogido
+        synchronized(obj) {
+            if(solicitudEnCurso && !concluida) {
+                System.out.println("Ya tienes una solicitud en curso en " + wsSolicitud);
+                return;
+            }
+        }
+
+        System.out.println("ID de la estación: ");
+        String idWS = sc.nextLine().trim();
+
+        System.out.println("Duración (s): ");
+        int duracion;
+        try {
+            duracion = Integer.parseInt(sc.nextLine().trim());
+        } catch(NumberFormatException e) {
+            System.out.println("Duración no válida");
+            return;
+        }
+        if(duracion <= 0) {
+            System.out.println("Duración no válida");
+            return;
+        }
+
+        // Aviso orientativo; quien decide es CENTRAL (pág. 5)
+        String[] info;
+        synchronized(obj) {
+            info = estaciones.get(idWS);
+        }
+        if(info == null) {
+            System.out.println("Aviso: no se conoce la estación " + idWS);
+        } else if(!info[1].equals("DISPONIBLE")) {
+            System.out.println("Aviso: " + idWS + " aparece como " + info[1]);
+        }
+
+        if(!enviarSolicitud(idWS, duracion)) {
+            System.out.println("Ya tienes una solicitud en curso");
+        }
+        // No se espera: el hilo consumidor irá mostrando las respuestas
+    }
+
+    private static boolean enviarSolicitud(String idWS, int duracion) {
+        synchronized(obj) {
+            // Comprobar y marcar en el mismo bloque, evita dos solicitudes a la vez
+            if(solicitudEnCurso && !concluida) {
+                return false;
+            }
+
+            solicitudEnCurso = false;
+            wsSolicitud = idWS;
+            concluida = false;
+            resultado = null;
+            ultimoMensaje = System.currentTimeMillis();
+        }
+
+        productor.send(new ProducerRecord<>(TOPIC_PETICIONES, idOperario, "SOLICITUD_RIEGO#" + idOperario + "#" + idWS + "#" + duracion));
+        System.out.println("Solicitud de riego enviada a CENTRAL para " + idWS + " (" + duracion + " s)");
+        return false;
     }
 
     public static void main(String[] args) {
