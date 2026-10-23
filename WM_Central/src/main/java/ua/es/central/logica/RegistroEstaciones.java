@@ -1,14 +1,21 @@
 package ua.es.central.logica;
 
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import ua.es.central.modelo.Estacion;
 import ua.es.central.modelo.Estado;
+import ua.es.central.basedatos.EstacionBD;
 
 public class RegistroEstaciones {
 	 private final Map<String, Estado> estados = new ConcurrentHashMap<>();
+    
+     private final EstacionBD bd;
+     public RegistroEstaciones(EstacionBD bd) {
+        this.bd = bd;
+     }
 	 
      public void cargar(List<Estacion> estaciones) {
         for(Estacion e : estaciones) {
@@ -32,7 +39,7 @@ public class RegistroEstaciones {
             return "KO";
         }
         
-        
+        guardar(id, Estado.DISPONIBLE);
         return "OK";
     }
 
@@ -47,13 +54,27 @@ public class RegistroEstaciones {
         String comando = partes[0];
         switch(comando) {
             case "STATUS":  break;
-            case "LEAK":       estados.put(id, Estado.FUGA);       break;
-            case "LEAK_FIXED": estados.replace(id, Estado.FUGA, Estado.DISPONIBLE); break;
+            case "LEAK":       estados.put(id, Estado.FUGA); guardar(id, Estado.FUGA);      break;
+            case "LEAK_FIXED": if(estados.replace(id, Estado.FUGA, Estado.DISPONIBLE)) {
+                                    guardar(id, Estado.DISPONIBLE);
+                                }      break;
+
+
             default:           return "KO";
         }
         return "OK";
     }
     public void desconectar(String id){
+        guardar(id, Estado.DESCONECTADA);
         estados.put(id, Estado.DESCONECTADA);
     }
+
+
+    private void guardar(String id, Estado estado) {
+        try {
+            bd.actualizarEstado(id, estado);
+        } catch (SQLException e) {
+            System.out.println("Error al actualizar el estado de la estacion " + id + ": " + e.getMessage());
+        }
+    }   
 }

@@ -10,6 +10,9 @@ import ua.es.central.modelo.Estado;
 import ua.es.central.red.ServidorSockets;
 import ua.es.central.logica.RegistroEstaciones;
 
+import java.io.IOException;
+import ua.es.central.basedatos.DatosIniciales;
+
 public class Main {
     
     public static void main(String[] args) {
@@ -36,16 +39,28 @@ public class Main {
             System.exit(1);
             return;
         }
-        RegistroEstaciones registro = new RegistroEstaciones();
+        RegistroEstaciones registro;
         // Se abre la base de datos; si falla, Central no puede continuar.
         try {
             Database baseDatos = new Database();
             EstacionBD estaciones = new EstacionBD(baseDatos);
+            OperarioBD operarios = new OperarioBD(baseDatos);
+            DatosIniciales.cargar(estaciones, operarios);
+            estaciones.desconectarTodas();
+
+            registro = new RegistroEstaciones(estaciones);
             registro.cargar(estaciones.listar());
+            System.out.println("Estaciones registradas: " + estaciones.listar().size());
+
 
         } catch (SQLException e) {
             System.out.println("Error con la base de datos: " + e.getMessage());
             System.exit(1);
+            return;
+        } catch (IOException e) {
+            System.out.println("Error al cargar datos iniciales: " + e.getMessage());
+            System.exit(1);
+            return;
         }
     
         System.out.println("WM_Central arrancado");
