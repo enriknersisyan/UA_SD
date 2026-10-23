@@ -88,7 +88,7 @@ public class Main {
         String[] campos = valor.split("#");
 
         // Comprobar el formato del mensaje
-        if(campos.length != 4 || campos[0] != "ESTADO") {
+        if(campos.length != 4 || !campos[0].equals("ESTADO")) {
             System.out.println("Mensaje de estado mal formado: " + valor);
             return;
         }
@@ -136,7 +136,7 @@ public class Main {
                 System.out.println("===== FIN DEL RIEGO en " + idWS + " =====");
                 System.out.println("Volumen total: " + campos[2] + " L");
                 System.out.println("Duración: " + campos[3] + " s");
-                System.err.println("Motivo: " + campos[4]);
+                System.out.println("Motivo: " + campos[4]);
 
                 if(campos[4].equals("FUGA")) {
                     System.out.println("Riego interrumpido por FUGA");
@@ -246,7 +246,7 @@ public class Main {
                 return false;
             }
 
-            solicitudEnCurso = false;
+            solicitudEnCurso = true;
             wsSolicitud = idWS;
             concluida = false;
             resultado = null;
@@ -255,7 +255,7 @@ public class Main {
 
         productor.send(new ProducerRecord<>(TOPIC_PETICIONES, idOperario, "SOLICITUD_RIEGO#" + idOperario + "#" + idWS + "#" + duracion));
         System.out.println("Solicitud de riego enviada a CENTRAL para " + idWS + " (" + duracion + " s)");
-        return false;
+        return true;
     }
 
     private static void hiloArchivo(String ruta) {
