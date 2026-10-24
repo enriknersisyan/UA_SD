@@ -1,9 +1,6 @@
 package ua.es.central.red;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.ExecutorService;
@@ -12,7 +9,7 @@ import java.net.SocketTimeoutException;
 
 
 import ua.es.central.logica.RegistroEstaciones;
-
+import ua.es.compartido.Canal;
 
 public class ServidorSockets{
 	private static final int TIMEOUT_LECTURA_MS = 3000;
@@ -39,27 +36,27 @@ public class ServidorSockets{
     }
     private void atender(Socket s) {
         String id = null;
-        try(s; BufferedReader entrada = new BufferedReader(new InputStreamReader(s.getInputStream()));
-            PrintWriter salida = new PrintWriter(s.getOutputStream(), true)){
+        try(s; Canal canal = new Canal(s)){
             
             s.setSoTimeout(TIMEOUT_LECTURA_MS);
-            String linea = entrada.readLine();
+            canal.aceptar();
+            String linea = canal.recibir();
             if(linea == null) { return;}
 
             String respuesta = registro.registrar(linea);
             System.out.println("Recibido " + linea + " ->" + respuesta);
-            salida.println(respuesta);
+            canal.enviar(respuesta);
             if(!"OK".equals(respuesta)){ return; }
                 
             id = linea.split("#")[1];
 
             s.setSoTimeout(TIMEOUT_LATIDO_MS);
-            while((linea = entrada.readLine()) != null){
+            while((linea = canal.recibir()) != null){
                 respuesta = registro.procesar(id, linea);
                 if(!linea.startsWith("STATUS#")){
                     System.out.println("Recibido "+ linea + " -> " + respuesta);
                 }
-                salida.println(respuesta);
+                canal.enviar(respuesta);
             }
         }catch(SocketTimeoutException e){
                 System.out.println("Estacion " + id + ": sin latidos, se da por caida");
@@ -70,6 +67,6 @@ public class ServidorSockets{
                 registro.desconectar(id);
                 System.out.println("Estacion " + id + " desconectada");                
             }
-        }
+        }            
     }
 }
