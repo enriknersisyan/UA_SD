@@ -1,8 +1,5 @@
 package ua.es.engine;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.net.Socket;
 import java.time.Duration;
 import java.util.Properties;
@@ -22,6 +19,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 
+import ua.es.compartido.Canal;
 
 public class Main {
     // Constantes
@@ -63,21 +61,18 @@ public class Main {
         // Si se pierde el monitor, se reintenta
         for(;;) {
             try {
-                try(Socket s = new Socket(ipMonitor, puertoMonitor)) {
-                BufferedReader entrada = new BufferedReader(new InputStreamReader(s.getInputStream()));
-                PrintWriter salida = new PrintWriter(s.getOutputStream(), true);
+                try(Socket s = new Socket(ipMonitor, puertoMonitor); Canal canal = new Canal(s)) {
+                canal.abrir();
 
-                System.out.println("Conectado al monitor");
-                
                 // Se obtiene el idWS desde el mensaje recibido
-                String msg = entrada.readLine();
+                String msg = canal.recibir();
                 if(msg != null && msg.startsWith("ASSIGN#")) {
                     idWS = msg.substring(msg.indexOf("#") + 1);
                 }
 
                 // Bucle interno para contestar a cada PING
                 for(;;) {
-                    msg = entrada.readLine();
+                    msg = canal.recibir();
 
                     // Se comprueba si el monitor se ha desconectado
                     if(msg == null) {
@@ -87,9 +82,9 @@ public class Main {
 
                     if(msg.equals(PING)) {
                         if(averia) {
-                            salida.println(KO);
+                            canal.enviar(KO);
                         } else {
-                            salida.println(OK);
+                            canal.enviar(OK);
                         }
                     }
                 }
