@@ -4,11 +4,9 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.SocketTimeoutException;
 import java.net.Socket;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
 
+import ua.es.compartido.Canal;
 public class Main {
     // CONSTANTES
     private static final String PING = "PING";
@@ -21,27 +19,34 @@ public class Main {
     private static volatile boolean averia = false; // De esta manera, el valor se mantiene entre engines
     private static final int LATIDO_MS = 2000;
 
-    // Conexión persistente con Central: mientras esté abierta, Central sabe que el monitor sigue vivo
-    private static Socket sCentral = null;
-    
+    private static Canal canalCentral = null;
+
+
     // Enum para diferenciar las distintas respuestas posibles de la central
     public enum RESPUESTA {OK, KO, SIN_RESPUESTA}
 
     // Función para enviar información a central
     private static synchronized String enviarCentral(String ip, int puerto, String mensaje) {
         // Si no hay conexión abierta, se abre una nueva
-        if(sCentral == null) {
+        if(canalCentral == null) {
+            Socket s = new Socket();
             try {
-                Socket s = new Socket();
                 s.connect(new InetSocketAddress(ip, puerto), TIMEOUT_CENTRAL_MS);
 
                 // Se añade un tiempo de timeout
                 s.setSoTimeout(TIMEOUT_CENTRAL_MS);
 
-                sCentral = s;
+                Canal c = new Canal(s);
+                c.abrir();
+                canalCentral = c;
             } catch(IOException e) {
+                try{
+                    s.close();                  
+                }catch(IOException ex) {}
                 return null;
+
             }
+                
 
             // Conexión nueva (p. ej. Central se reinició): hay que registrarse antes de enviar nada más
             if(!mensaje.startsWith("REGISTER#")) {
@@ -62,31 +67,28 @@ public class Main {
 
     // Cierra la conexión con Central (si la hay)
     private static synchronized void cerrarCentral() {
-        if(sCentral != null) {
+        if(canalCentral != null) {
             try {
-                sCentral.close();
+                canalCentral.close();
             } catch(IOException e) {}
-            sCentral = null;
+            canalCentral = null;
         }
     }
 
     // Envía un mensaje por la conexión abierta y devuelve la respuesta (null si falla)
     private static synchronized String intercambiar(String mensaje) {
         try {
-            BufferedReader entrada = new BufferedReader(new InputStreamReader(sCentral.getInputStream()));
-            PrintWriter salida = new PrintWriter(sCentral.getOutputStream(), true);
-
-            salida.println(mensaje);
-            String respuesta = entrada.readLine();
+            String respuesta = canalCentral.peticion(mensaje);
             if(respuesta == null) {
                 cerrarCentral(); // Central ha cerrado la conexión
             }
             return respuesta;
-        } catch(IOException e) {
-            cerrarCentral();
-            return null;
+            } catch(IOException e) {
+                cerrarCentral();
+                return null;
+            }
         }
-    }
+    
 
     // Función auxiliar que envia un latido periódico a Central para que sepa que está vivo
     private static void latido(String ip, int puerto, String id) {
@@ -123,14 +125,13 @@ public class Main {
 
     // Función para gestionar un engine cuando llega
     private static void gestionarEngine(Socket sEngine, String ipCentral, int puertoCentral, String idWS) {
-        try(Socket s = sEngine) {
+        try(Socket s = sEngine; Canal canal = new Canal(s)){
             System.out.println("Engine conectado.");
 
-            BufferedReader entrada = new BufferedReader(new InputStreamReader(s.getInputStream()));
-            PrintWriter salida = new PrintWriter(s.getOutputStream(), true);
-
-            salida.println("ASSIGN#" + idWS);
+            
             s.setSoTimeout(TIMEOUT_ENGINE_MS);
+            canal.aceptar();
+            canal.enviar("ASSIGN#" + idWS);
 
             // Bucle interno
             boolean fallo;
@@ -138,14 +139,13 @@ public class Main {
             String respuesta;
             boolean desconectado;
             for(;;) {
-                salida.println(PING);
 
                 fallo = false;
                 motivo = "";
                 desconectado = false;
 
                 try {
-                    respuesta = entrada.readLine();
+                    respuesta = canal.peticion(PING);
                    
                     if(respuesta == null) {
                         fallo = true;
