@@ -15,7 +15,13 @@
     <properties>
         <main.class>ua.es.mon.Main</main.class>
     </properties>
-
+	<dependencies>
+		<dependency>
+			<groupId>com.wm</groupId>
+			<artifactId>wm-compartido</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+	</dependencies>
     <build>
         <finalName>WM_WS_M</finalName>
         <plugins>

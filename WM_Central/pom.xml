@@ -18,6 +18,11 @@
 
 	<dependencies>
 		<dependency>
+			<groupId>com.wm</groupId>
+			<artifactId>wm-compartido</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<dependency>
 			<groupId>org.apache.kafka</groupId>
 			<artifactId>kafka-clients</artifactId>
 			<version>${kafka.version}</version>
