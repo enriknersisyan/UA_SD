@@ -56,6 +56,8 @@ public class Main {
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "fo-" + idOperario);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         try(KafkaConsumer<String, String> consumidor = new KafkaConsumer<>(props)) {
             // Se suscribe a los topics
@@ -253,7 +255,12 @@ public class Main {
             ultimoMensaje = System.currentTimeMillis();
         }
 
-        productor.send(new ProducerRecord<>(TOPIC_PETICIONES, idOperario, "SOLICITUD_RIEGO#" + idOperario + "#" + idWS + "#" + duracion));
+        productor.send(new ProducerRecord<>(TOPIC_PETICIONES, idOperario, "SOLICITUD_RIEGO#" + idOperario + "#" + idWS + "#" + duracion),
+        (metadata, error) -> {
+            if(error != null) {
+                System.out.println("Error: la solicitud no ha llegado a Kafka: " + error.getMessage());
+            }
+        });
         System.out.println("Solicitud de riego enviada a CENTRAL para " + idWS + " (" + duracion + " s)");
         return true;
     }
