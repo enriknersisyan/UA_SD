@@ -161,7 +161,7 @@ public class Main {
                     }
 
                     // Mandar solicitud de riego a la central
-                    productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "SOLICITUD_RIEGO#" + idWS + "#LOCAL#" + duracion));
+                    enviar(TOPIC_EVENTOS, "SOLICITUD_RIEGO#" + idWS + "#LOCAL#" + duracion);
                     System.out.println("Solicitud enviada a CENTRAL, esperando autorización...");
                 } else if(entradaUsr.toLowerCase().equals("s")) {
                     if(estado.equals(ESTADO.REGANDO)) {
@@ -178,6 +178,15 @@ public class Main {
         } 
     }
 
+    // Envía un mensaje a Kafka y avisa si no llega al broker (equivale a delivery_report)
+    private static void enviar(String topic, String mensaje) {
+        productor.send(new ProducerRecord<>(topic, idWS, mensaje), (metadata, error) -> {
+            if(error != null) {
+                System.out.println("Error: no se ha podido enviar a Kafka '" + mensaje + "': " + error.getMessage());
+            }
+        });
+    }
+
     // Función para gestionar el hilo de kafka
     private static void hiloKafka(String ipBroker, int puertoBroker) {
         // Se crea el consumidor local, solo utilizado por este hilo
@@ -186,6 +195,8 @@ public class Main {
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "engine-" + idWS); // grupo propio por cada engine
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
 
         try(KafkaConsumer<String, String> consumidor = new KafkaConsumer<>(props)) {
             // Se suscribe a los topics
@@ -215,19 +226,19 @@ public class Main {
                                     idOperario = campos[1];
                                 } catch(NumberFormatException e) {
                                     System.out.println("Número no válido");
-                                    productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "RESP_AUTORIZACION#" + idWS + "#KO#MENSAJE_INVALIDO"));
+                                    enviar(TOPIC_EVENTOS, "RESP_AUTORIZACION#" + idWS + "#KO#MENSAJE_INVALIDO");
                                     continue;
                                 } catch(ArrayIndexOutOfBoundsException e) {
                                     System.out.println("Mensaje AUTORIZACION mal formado: " + msg.value());
-                                    productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "RESP_AUTORIZACION#" + idWS + "#KO#MENSAJE_INVALIDO"));
+                                    enviar(TOPIC_EVENTOS, "RESP_AUTORIZACION#" + idWS + "#KO#MENSAJE_INVALIDO");
                                     continue;
                                 }
 
                                 estado = ESTADO.PENDIENTE_INICIO;
-                                productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "RESP_AUTORIZACION#" + idWS + "#OK"));
+                                enviar(TOPIC_EVENTOS, "RESP_AUTORIZACION#" + idWS + "#OK");
                                 System.out.println("Riego autorizado para " + idOperario + ", esperando inicio");
                             } else {
-                                productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "RESP_AUTORIZACION#" + idWS + "#KO#" + estado));
+                                enviar(TOPIC_EVENTOS, "RESP_AUTORIZACION#" + idWS + "#KO#" + estado);
                                 System.out.println("Autorización denegada (estado " + estado + ")");
                             }
                         }
@@ -257,7 +268,7 @@ public class Main {
                             }
                             estadoActual = estado.toString();
                         }
-                        productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "ESTADO#" + idWS + "#" + estadoActual));
+                        enviar(TOPIC_EVENTOS, "ESTADO#" + idWS + "#" + estadoActual);
                         System.out.println("Bloqueo recibido. Estado actual: " + estadoActual);
                     } else if(accion.equals("ACTIVAR")) { // Si la central pide activar
                         String estadoActual;
@@ -270,7 +281,7 @@ public class Main {
                             }
                             estadoActual = estado.toString();
                         }
-                        productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "ESTADO#" + idWS + "#" + estadoActual));
+                        enviar(TOPIC_EVENTOS, "ESTADO#" + idWS + "#" + estadoActual);
                         System.out.println("Estado actual: " + estadoActual);
                     } else {
                         System.out.println("Accion desconocida: " + accion);
@@ -315,7 +326,7 @@ public class Main {
         }
 
         // Se envia fuera para no bloquear a los demás hilos
-        productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, msg));
+        enviar(TOPIC_EVENTOS, msg);
     }
 
     // Debido a que se llama siempre ya desde synchronized(obj), aqui no hace falta ponerlo
@@ -330,7 +341,7 @@ public class Main {
         System.out.println("Abriendo electroválvula. Riego iniciado por " + idOperario);
 
         // se manda la información de que el riego ha sido iniciado
-        productor.send(new ProducerRecord<>(TOPIC_EVENTOS, idWS, "RIEGO_INICIADO#" + idWS + "#" + idOperario));
+        enviar(TOPIC_EVENTOS, "RIEGO_INICIADO#" + idWS + "#" + idOperario);
 
         // El riego va en su propio hilo para no bloquear hiloKafka
         new Thread(() -> hiloRiego(r)).start();
@@ -363,7 +374,7 @@ public class Main {
             }
 
             // Se envia fuera para no bloquear a los demás hilos
-            productor.send(new ProducerRecord<>(TOPIC_TELEMETRIA, idWS, "TELEMETRIA#" + idWS + "#" + caudal + "#" + volumenActual + "#" + operario));
+            enviar(TOPIC_TELEMETRIA, "TELEMETRIA#" + idWS + "#" + caudal + "#" + volumenActual + "#" + operario);
 
             if(segundos >= limite) {
                 finalizarRiego("LIMITE_TIEMPO");
