@@ -1,0 +1,6 @@
+**/target
+.git
+.vs
+.vscode
+*.basedatos
+wm_central.db
