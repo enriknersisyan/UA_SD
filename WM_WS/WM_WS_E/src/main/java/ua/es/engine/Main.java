@@ -30,7 +30,7 @@ public class Main {
     private static final int PERIODO_MS = 1000;
 
     // Enum para diferenciar los distintos estados de la WS
-    public enum ESTADO { DISPONIBLE, PENDIENTE_INICIO, REGANDO, FUERA_SERVICIO, FUGA}
+    public enum ESTADO { DISPONIBLE, REGANDO, FUGA, FUERA_SERVICIO, DESCONECTADA }
 
     // Estado compartido(usado por los hilos)
     private static final Object obj = new Object();
@@ -40,10 +40,11 @@ public class Main {
 
     // Variables usadas por varios hilos
     private static volatile String idWS = null;
-    private static volatile ESTADO estado = ESTADO.DISPONIBLE;
+    private static volatile ESTADO estado = ESTADO.DESCONECTADA;
     private static volatile boolean averia = false;
     private static volatile boolean riego = false;
     private static volatile boolean bloqueada = false;
+    private static boolean pendienteInicio = false; // Riego autorizado, esperando la orden INICIAR
 
     // Datos del riego en curso
     private static  String idOperario = "";
@@ -67,7 +68,17 @@ public class Main {
                 // Se obtiene el idWS desde el mensaje recibido
                 String msg = canal.recibir();
                 if(msg != null && msg.startsWith("ASSIGN#")) {
-                    idWS = msg.substring(msg.indexOf("#") + 1);
+                    String id = msg.substring(msg.indexOf("#") + 1);
+
+                    // Conectada, pasa al estado que corresponda
+                    synchronized(obj) {
+                        if(estado.equals(ESTADO.DESCONECTADA)) {
+                            estado = estadoReposo();
+                        }
+                    }
+
+                    idWS = id;
+                    System.out.println("Conectado al monitor");
                 }
 
                 // Bucle interno para contestar a cada PING
@@ -92,11 +103,44 @@ public class Main {
                 } catch(IOException e) {
                     System.out.println("Monitor no disponible, reintentando en 3 s...");
                 }
+            
+                // Tanto si el monitor se ha cerrado como si no se ha podido conectar
+                desconectarMonitor();
 
-            Thread.sleep(REINTENTO_MS);
+                Thread.sleep(REINTENTO_MS);
             } catch(InterruptedException e) {
                 return;
             }
+        }
+    }
+
+    // Estado de la WS cuando no está regando (se llama siempre dentro de synchronized(obj))
+    private static ESTADO estadoReposo() {
+        if(averia) {
+            return ESTADO.FUGA;
+        }
+
+        if(bloqueada) {
+            return ESTADO.FUERA_SERVICIO;
+        }
+
+        return ESTADO.DISPONIBLE;
+    }
+
+    // La WS deja de estar conectada al sistema central a través del monitor
+    private static void desconectarMonitor() {
+        synchronized(obj) {
+            if(estado.equals(ESTADO.DESCONECTADA)) {
+                return;
+            }
+
+            // Sin monitor no se puede supervisar el riego, se detiene
+            if(riego || pendienteInicio) {
+                finalizarRiego("DESCONEXION");
+            }
+
+            estado = ESTADO.DESCONECTADA;
+            System.out.println("WS desconectada del monitor");
         }
     }
     
@@ -135,18 +179,16 @@ public class Main {
                         // Se comprueba el nuevo valor
                         if(averia) {
                             System.out.println("Avería simulada");
-                            if(estado.equals(ESTADO.REGANDO) || estado.equals(ESTADO.PENDIENTE_INICIO)) {
+                            if(riego || pendienteInicio) {
                                 finalizarRiego("FUGA");
                             }
-
-                            estado = ESTADO.FUGA;
                         } else {
                             System.out.println("Averia resuelta");
-                            if(bloqueada) {
-                                estado = ESTADO.FUERA_SERVICIO;
-                            } else {
-                                estado = ESTADO.DISPONIBLE;
-                            }
+                        }
+
+                        // FUGA si hay avería; si no, FUERA_SERVICIO si está bloqueada o DISPONIBLE
+                        if(!estado.equals(ESTADO.DESCONECTADA)) {
+                            estado = estadoReposo();
                         }
                     }
                 } else if(entradaUsr.toLowerCase().equals("r")) {
@@ -220,7 +262,7 @@ public class Main {
                         // De esta manera, si un hilo llega hasta este punto pero hay otro dentro,
                         // el recién llegado espera la salida del actual para ejecutar el código
                         synchronized(obj) {
-                            if(estado.equals(ESTADO.DISPONIBLE) && !averia) {
+                            if(estado.equals(ESTADO.DISPONIBLE) && !averia && !pendienteInicio) {
                                 try {
                                     limiteSeg = Integer.parseInt(campos[2]);
                                     idOperario = campos[1];
@@ -234,37 +276,40 @@ public class Main {
                                     continue;
                                 }
 
-                                estado = ESTADO.PENDIENTE_INICIO;
+                                pendienteInicio = true;
                                 enviar(TOPIC_EVENTOS, "RESP_AUTORIZACION#" + idWS + "#OK");
                                 System.out.println("Riego autorizado para " + idOperario + ", esperando inicio");
                             } else {
-                                enviar(TOPIC_EVENTOS, "RESP_AUTORIZACION#" + idWS + "#KO#" + estado);
-                                System.out.println("Autorización denegada (estado " + estado + ")");
+                                // Si ya hay un riego autorizado pendiente, la WS está ocupada
+                                String motivo = pendienteInicio ? "OCUPADA" : estado.toString();
+                                enviar(TOPIC_EVENTOS, "RESP_AUTORIZACION#" + idWS + "#KO#" + motivo);
+                                System.out.println("Autorización denegada (" + motivo + ")");
                             }
                         }
                     } else if(accion.equals("INICIAR")) { // Si la central pide iniciar
                         synchronized(obj) {
-                            if(estado.equals(ESTADO.PENDIENTE_INICIO)) {
+                            if(pendienteInicio && estado.equals(ESTADO.DISPONIBLE)) {
                                 iniciarRiego();
                             }
                         }
                     } else if(accion.equals("CANCELAR")) { // si la central pide cancelar
                         synchronized(obj) {
-                            if(estado.equals(ESTADO.PENDIENTE_INICIO)) {
-                                estado = ESTADO.DISPONIBLE;
+                            if(pendienteInicio) {
+                                pendienteInicio = false;
                                 System.out.println("Riego cancelado por CENTRAL");
                             }
                         }
                     } else if(accion.equals("BLOQUEAR")) { // si la central pide bloquear
                         String estadoActual;
                         synchronized(obj) {
-                            if(estado.equals(ESTADO.REGANDO) || estado.equals(ESTADO.PENDIENTE_INICIO)) {
+                            bloqueada = true;
+                            if(riego || pendienteInicio) {
                                 finalizarRiego("BLOQUEO_CENTRAL");
                             }
-
-                            bloqueada = true;
-                            if(!averia) {
-                                estado = ESTADO.FUERA_SERVICIO;
+                            
+                            // FUERA_SERVICIO, o FUGA si hay avería (la fuga tiene prioridad)
+                            if(!estado.equals(ESTADO.DESCONECTADA)) {
+                                estado = estadoReposo();
                             }
                             estadoActual = estado.toString();
                         }
@@ -274,11 +319,12 @@ public class Main {
                         String estadoActual;
                         synchronized(obj) {
                             bloqueada = false;
-                            if(averia) {
-                                estado = ESTADO.FUGA;
-                            } else if(estado.equals(ESTADO.FUERA_SERVICIO)) {
-                                estado = ESTADO.DISPONIBLE;
+
+                            // Un riego en marcha no se interrumpe al activar
+                            if(!estado.equals(ESTADO.DESCONECTADA) && !estado.equals(ESTADO.REGANDO)) {
+                                estado = estadoReposo();
                             }
+
                             estadoActual = estado.toString();
                         }
                         enviar(TOPIC_EVENTOS, "ESTADO#" + idWS + "#" + estadoActual);
@@ -300,11 +346,12 @@ public class Main {
         // De esta manera, si un hilo llega hasta este punto pero hay otro dentro,
         // el recién llegado espera la salida del actual para ejecutar el código
         synchronized(obj) {
-            if(!riego && !estado.equals(ESTADO.PENDIENTE_INICIO)) {
+            if(!riego && !pendienteInicio) {
                 return;
             }
 
             riego = false;
+            pendienteInicio = false;
             System.out.println("Cerrando electroválvula (" + motivo + ")");
 
             long duracionReal = 0;
@@ -318,8 +365,8 @@ public class Main {
             
             inicioRiego = 0;
 
-            if(motivo.equals("LIMITE_TIEMPO") || motivo.equals("PARADA_MANUAL")) {
-                estado = ESTADO.DISPONIBLE;
+            if(!estado.equals(ESTADO.DESCONECTADA)) {
+                estado = estadoReposo();
             }
 
             msg = "FIN_RIEGO#" + idWS + "#" + idOperario + "#" + volumenFinal + "#" + duracionReal + "#" + motivo;
@@ -331,6 +378,7 @@ public class Main {
 
     // Debido a que se llama siempre ya desde synchronized(obj), aqui no hace falta ponerlo
     private static void iniciarRiego() {
+        pendienteInicio = false;
         estado = ESTADO.REGANDO;
         riego = true;
         volumen = 0;
