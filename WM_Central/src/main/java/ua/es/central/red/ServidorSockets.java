@@ -10,7 +10,9 @@ import java.net.SocketTimeoutException;
 
 import ua.es.central.logica.RegistroEstaciones;
 import ua.es.compartido.Canal;
-
+/**
+ * Servidor de sockets que atiende a estaciones de trabajo
+ */
 public class ServidorSockets{
 	private static final int TIMEOUT_LECTURA_MS = 3000;
     private static final int TIMEOUT_LATIDO_MS = 6000;
@@ -18,10 +20,19 @@ public class ServidorSockets{
     private final int puerto;
     private final RegistroEstaciones registro;
 
+    /**
+     * Crea un servidor de sockets en el puerto indicado y con el registro de estaciones dado
+     * @param puerto puerto en el que escuchar
+     * @param registro registro de estaciones
+     */
     public ServidorSockets(int puerto, RegistroEstaciones registro) {
         this.puerto = puerto;
         this.registro = registro;
     }
+
+    /**
+     * Arranca el servidor de sockets y atiende a los clientes en hilos virtuales
+     */
     public void arrancar(){
         try(ServerSocket ss = new ServerSocket(puerto);
         ExecutorService hilos = Executors.newVirtualThreadPerTaskExecutor()){
@@ -34,6 +45,10 @@ public class ServidorSockets{
             System.exit(1);
         }
     }
+    /**
+    * Atiende a un cliente en un hilo virtual
+     * @param s socket del cliente
+     */
     private void atender(Socket s) {
         String id = null;
         try(s; Canal canal = new Canal(s)){
@@ -45,10 +60,9 @@ public class ServidorSockets{
 
             String respuesta = registro.registrar(linea);
             System.out.println("Recibido " + linea + " ->" + respuesta);
+            if("OK".equals(respuesta)){ id = linea.split("#")[1]; } // antes de enviar, para que el finally la libere si el envio falla
             canal.enviar(respuesta);
-            if(!"OK".equals(respuesta)){ return; }
-                
-            id = linea.split("#")[1];
+            if(id == null){ return; }
 
             s.setSoTimeout(TIMEOUT_LATIDO_MS);
             while((linea = canal.recibir()) != null){

@@ -12,7 +12,7 @@ public final class Trama {
     public static final byte NACK = 0x15; // recibido mal, repitelo
 
     private Trama() {
-        // Constructor privado para evitar instanciación 
+        // Constructor privado para evitar instanciacion 
     }
     public static byte lrc(byte[] datos){
         byte resultado = 0;

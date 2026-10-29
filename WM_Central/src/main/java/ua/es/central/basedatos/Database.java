@@ -13,7 +13,10 @@ public class Database{
 	private final Connection conexion;
 
 
-
+	/**
+	 * Crea la conexion a la base de datos. Si no existe el fichero se crea.
+	 * @throws SQLException si hay un error al abrir la base de datos.
+	 */
 	public Database() throws SQLException{
 		String ruta = System.getenv(VARIABLE_RUTA);
 		if (ruta == null || ruta.isBlank()){
@@ -24,6 +27,9 @@ public class Database{
 		crearTablas();
 
 	}
+	/**
+	* Crea las tablas si no existen. No borra ni modifica las existentes.
+	 */
 	private void crearTablas() throws SQLException{
 		try (Statement sentencia = conexion.createStatement()) {
             sentencia.execute(
@@ -43,21 +49,5 @@ public class Database{
 	}
 	public void cerrar() throws SQLException{
 		conexion.close();
-	}	
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	}
 }
