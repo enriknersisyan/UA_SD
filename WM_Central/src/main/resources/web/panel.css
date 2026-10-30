@@ -1,0 +1,320 @@
+/* ==========================================================
+   PANEL DE CENTRAL – ESTILOS
+   ========================================================== */
+
+/* ---------- Colores (tema claro) ---------- */
+:root {
+  color-scheme: light;
+  --fondo: #E6EDF1;
+  --superficie: #FFFFFF;
+  --tinta: #14293B;
+  --tinta-suave: #4B6274;
+  --linea: #C9D6DE;
+  --agua: #1E6FA6;
+  --agua-suave: #D6E7F3;
+
+  /* Colores de estado del enunciado (pág. 4) */
+  --verde: #23733F;   --verde-fondo: #CDEBD7;  --verde-pulso: #8ED3A6;
+  --rojo: #A93226;    --rojo-fondo: #F6D3CE;
+  --naranja: #9C4F06; --naranja-fondo: #FAD9B3;
+  --gris: #56656F;    --gris-fondo: #DCE3E8;
+}
+
+/* ---------- Colores (tema oscuro, según el sistema) ---------- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --fondo: #0E1A23;
+    --superficie: #162733;
+    --tinta: #E3ECF1;
+    --tinta-suave: #9FB3C1;
+    --linea: #2A3F4D;
+    --agua: #62AEE0;
+    --agua-suave: #1B3A50;
+
+    --verde: #7BD89D;   --verde-fondo: #1D3B29;  --verde-pulso: #2F6B45;
+    --rojo: #F39286;    --rojo-fondo: #4A2420;
+    --naranja: #F5B36E; --naranja-fondo: #4A3016;
+    --gris: #A4B2BC;    --gris-fondo: #24323B;
+  }
+}
+
+/* ---------- Base ---------- */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--tinta);
+  font-family: "Public Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;   /* las cifras no "bailan" al actualizarse */
+}
+
+:focus-visible { outline: 3px solid var(--agua); outline-offset: 2px; }
+
+h1, h2 { margin: 0; font-weight: 700; }
+h2 { font-size: 1rem; }
+
+/* ---------- Cabecera ---------- */
+.cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: 18px 24px;
+  background: var(--superficie);
+  border-bottom: 1px solid var(--linea);
+}
+.cabecera h1 { font-size: 1.35rem; letter-spacing: -0.01em; }
+.cabecera p  { margin: 2px 0 0; color: var(--tinta-suave); font-size: 0.9rem; }
+
+/* Indicador de conexión del navegador con CENTRAL */
+.conexion {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: var(--tinta-suave);
+}
+.conexion::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--gris);
+}
+.conexion.ok::before    { background: var(--verde); }
+.conexion.error::before { background: var(--rojo); }
+
+/* Aviso de conexión perdida */
+.aviso {
+  margin: 0;
+  padding: 10px 24px;
+  background: var(--rojo-fondo);
+  color: var(--tinta);
+  font-size: 0.9rem;
+}
+.aviso[hidden] { display: none; }
+
+/* ---------- Recuento por estado ---------- */
+.resumen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px 24px 0;
+  margin: 0;
+  list-style: none;
+}
+.resumen li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+.resumen strong { font-size: 1.15rem; }
+
+/* ---------- Distribución: columna principal + lateral ---------- */
+.contenido {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+  padding: 16px 24px 24px;
+}
+@media (max-width: 960px) {
+  .contenido { grid-template-columns: minmax(0, 1fr); }
+}
+
+.principal,
+.lateral {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.bloque {
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  border-radius: 8px;
+}
+.bloque > h2 { padding: 14px 16px 10px; }
+
+/* ---------- Tablas (estaciones y peticiones) ---------- */
+.tabla-contenedor { overflow-x: auto; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 10px 16px; text-align: left; white-space: nowrap; }
+th {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--tinta-suave);
+  border-bottom: 1px solid var(--linea);
+}
+td { border-bottom: 1px solid var(--linea); }
+td.numero, th.numero { text-align: right; }
+td.texto-suave { color: var(--tinta-suave); }
+
+/* Filas de estaciones: se pueden seleccionar */
+#tabla tr { cursor: pointer; }
+#tabla tr:hover { background: var(--agua-suave); }
+#tabla tr.seleccionada {
+  box-shadow: inset 4px 0 0 var(--agua);
+  background: var(--agua-suave);
+}
+
+/* Peticiones ya terminadas: más apagadas que las activas */
+#peticiones tr.terminada td { color: var(--tinta-suave); }
+
+.vacio { padding: 16px; margin: 0; color: var(--tinta-suave); }
+
+/* ---------- Etiqueta de estado de la WS (colores del enunciado, pág. 4) ---------- */
+.estado {
+  display: inline-block;
+  min-width: 9.5em;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.88rem;
+  text-align: center;
+}
+.estado-disponible     { background: var(--verde-fondo);   color: var(--verde); }
+.estado-regando        { background: var(--verde-fondo);   color: var(--verde); }
+.estado-fuga           { background: var(--rojo-fondo);    color: var(--rojo); }
+.estado-fuera_servicio { background: var(--naranja-fondo); color: var(--naranja); }
+.estado-desconectada   { background: var(--gris-fondo);    color: var(--gris); }
+
+/* Verde parpadeando para "Regando" (solo en tabla y detalle, no en el recuento) */
+.estado.estado-regando { animation: parpadeo 1s ease-in-out infinite; }
+
+@keyframes parpadeo {
+  50% { background: var(--verde-pulso); }
+}
+
+/* Si el usuario pide menos movimiento, el parpadeo se sustituye por un símbolo */
+@media (prefers-reduced-motion: reduce) {
+  .estado.estado-regando { animation: none; }
+  .estado.estado-regando::before { content: "● "; }
+}
+
+/* ---------- Etiqueta de fase de una petición ---------- */
+.fase {
+  display: inline-block;
+  min-width: 7em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.82rem;
+  text-align: center;
+}
+.fase-recibida   { background: var(--agua-suave);    color: var(--agua); }
+.fase-autorizada { background: var(--agua-suave);    color: var(--agua); }
+.fase-regando    { background: var(--verde-fondo);   color: var(--verde); }
+.fase-terminada  { background: var(--gris-fondo);    color: var(--gris); }
+.fase-denegada   { background: var(--rojo-fondo);    color: var(--rojo); }
+
+/* ---------- Listas de datos (estado de CENTRAL y detalle) ---------- */
+.datos,
+.detalle dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  margin: 0;
+}
+.datos { padding: 0 16px 16px; }
+.datos dt,
+.detalle dt { color: var(--tinta-suave); }
+.datos dd,
+.detalle dd { margin: 0; text-align: right; font-weight: 600; }
+
+/* Valores con color: correcto, aviso y error */
+.ok    { color: var(--verde); }
+.alerta { color: var(--naranja); }
+.error { color: var(--rojo); }
+
+/* ---------- Detalle de la estación ---------- */
+.detalle { padding: 0 16px 16px; }
+.detalle .titulo-ws { font-size: 1.6rem; font-weight: 700; margin: 0 0 2px; }
+.detalle .ubicacion { margin: 0 0 12px; color: var(--tinta-suave); }
+.detalle .subtitulo {
+  margin: 14px 0 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--tinta-suave);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ---------- Formulario de órdenes ---------- */
+.ordenes {
+  padding: 0 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+fieldset { border: 0; margin: 0; padding: 0; }
+legend { font-size: 0.85rem; color: var(--tinta-suave); margin-bottom: 6px; padding: 0; }
+
+.opciones { display: flex; gap: 16px; flex-wrap: wrap; }
+.opciones label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--tinta-suave);
+}
+
+input[type="number"] {
+  font: inherit;
+  color: var(--tinta);
+  background: var(--fondo);
+  border: 1px solid var(--linea);
+  border-radius: 6px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.botones { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+button {
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 9px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.b-iniciar  { background: var(--verde-fondo);   color: var(--verde);   border-color: var(--verde); }
+.b-bloquear { background: var(--naranja-fondo); color: var(--naranja); border-color: var(--naranja); }
+.b-activar  { background: var(--agua-suave);    color: var(--agua);    border-color: var(--agua); }
+
+.respuesta {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--tinta-suave);
+  min-height: 1.2em;
+}
+
+/* ---------- Mensajes de la aplicación ---------- */
+.zona-eventos { grid-column: 1 / -1; }
+
+.eventos {
+  margin: 0;
+  padding: 0 16px 16px;
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+  font-size: 0.88rem;
+}
+.eventos li { padding: 4px 0; border-bottom: 1px dashed var(--linea); }
+.eventos time { color: var(--tinta-suave); margin-right: 8px; }

@@ -1,2 +1,3 @@
 - Ayudame a generar los pom.xml de cada carpeta.
 - Ayudame a crear el productor y consumidor en WM_WS_E
+- Ayudame a generar el css y el js para la interfaz

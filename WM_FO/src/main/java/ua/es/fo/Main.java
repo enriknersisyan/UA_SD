@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
+import java.util.UUID;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -53,11 +54,11 @@ public class Main {
         // Consumidor local
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, ipBroker + ":" + puertoBroker);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, "fo-" + idOperario);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "fo-" + idOperario + "-" + UUID.randomUUID()); // grupo nuevo en cada arranque
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
 
         try(KafkaConsumer<String, String> consumidor = new KafkaConsumer<>(props)) {
             // Se suscribe a los topics
