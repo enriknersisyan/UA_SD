@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title> WM_Central - Panel de riego</title>
+
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+        <!-- Para conectar con los scipts y el estilo de la página-->
+        <script src="" defer></script>
+        <link rel="stylesheet" href="">
+    </head>
+
+    <body>
+        <header class="cabecera">
+            <div>
+                <hi>WM_Central - Panel de riego</hi>
+                <p>Red de parques y jardines de la ciudad</p>
+            </div>
+            <span id="conexion" class="conexion">Conectando con CENTRAL...</span>
+        </header>
+
+        <p id="aviso" class="aviso" hidden>
+            Se ha perdido la conexión con CENTRAL. Se muestran los últimos datos recibidos y se reintenta cada segundo.
+        </p>
+
+        <!-- Recuento de estaciones por cada estado-->
+        <ul idi="resumen" class="resumen" aria-label="Recuento de estaciones por estado"></ul>
+
+        <main class="contenido">
+            <div class="principal">
+                <!-- Estaciones de riego-->
+                <section class="bloque" aria-labelledby="t-estaciones">
+                    <h2 id="t-estaciones">Estaciones de riego</h2>
+                    <div class="tabla-contenedor">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th scope="col">ID</th>
+                                    <th scope="col">Ubicación</th>
+                                    <th scope="col">Estado</th>
+                                    <th scope="col" class="numero">Caudal (L/min)</th>
+                                    <th scope="col" class="numero">Volumen (L)</th>
+                                    <th scope="col">Operario</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabla"></tbody>
+                        </table>
+                    </div>
+                    <p id="tabla-vacia" class="vacio" hidden>No hay estaciones registradas en la base de datos de CENTRAL.</p>
+                </section>
+
+                <!-- Peticiones de activación-->
+                <section class="bloque" aria-labelledby="t-peticiones">
+                    <h2 id="t-peticiones">Peticiones de activación</h2>
+                    <div class="tabla-contenedor">
+                        <table>
+                        <thead>
+                            <tr>
+                            <th scope="col">Hora</th>
+                            <th scope="col">Operario</th>
+                            <th scope="col">Estación</th>
+                            <th scope="col" class="numero">Duración (s)</th>
+                            <th scope="col">Fase</th>
+                            <th scope="col">Resultado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="peticiones"></tbody>
+                        </table>
+                    </div>
+                    <p id="peticiones-vacia" class="vacio" hidden>Todavía no se ha recibido ninguna petición de riego.</p>
+                </section>
+            </div>
+
+            <div class="lateral">
+                <!-- Estado del sistema central-->
+                <section class="bloque" aria-labelledby="t-central">
+                    <h2 id="t-central">Estado del sistema central</h2>
+                    <dl id="central" class="datos"></dl>
+                </section>
+
+                <!-- Detalle de la estación seleccionada-->
+                <section class="bloque" aria-labelledby="t-detalle">
+                    <h2 id="t-detalle">Estación seleccionada</h2>
+                    <div id="detalle" class="detalle"></div>
+                </section>
+
+                <!-- Órdenes de CENTRAL-->
+                <section class="bloque" aria-labelledby="t-ordenes">
+                    <h2 id="t-ordenes">Órdenes</h2>
+                    <form id="form-ordenes" class="ordenes">
+                        <fieldset>
+                            <legend>Enviar a</legend>
+                            <div class="opciones">
+                                <label><input type="radio" name="destino" value="una" checked> La seleccionada</label>
+                                <label><input type="radio" name="destino" value="todas"> Todas</label>
+                            </div>
+                        </fieldset>
+
+                        <label class="campo" for="duracion">
+                            Duración del riego (s)
+                            <input id="duracion" type="number" min="1" step="1" value="30">
+                        </label>
+
+                        <div class="botones">
+                            <button type="button" class="b-iniciar"  data-accion="INICIAR">Iniciar riego</button>
+                            <button type="button" class="b-bloquear" data-accion="BLOQUEAR">Bloquear</button>
+                            <button type="button" class="b-activar"  data-accion="ACTIVAR">Activar</button>
+                        </div>
+
+                        <p id="respuesta" class="respuesta" role="status" aria-live="polite"></p>
+                    </form>
+                </section>
+            </div>
+
+            <!-- Mensajes de la aplicación-->
+            <section class="bloque zona-eventos" aria-labelledby="t-eventros">
+                <h2 id="t-eventos">Mensajes de aplicación</h2>
+                <ul id="eventos" class="eventos"></ul>
+            </section>
+        </main>
+    </body>
+</html>
