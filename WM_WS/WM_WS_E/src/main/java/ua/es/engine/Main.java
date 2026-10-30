@@ -30,7 +30,7 @@ public class Main {
     private static final int PERIODO_MS = 1000;
 
     // Enum para diferenciar los distintos estados de la WS
-    public enum ESTADO { DISPONIBLE, REGANDO, FUGA, FUERA_SERVICIO, DESCONECTADA }
+    public enum ESTADO { DISPONIBLE, REGANDO, FUGA, FUERA_DE_SERVICIO, DESCONECTADA }
 
     // Estado compartido(usado por los hilos)
     private static final Object obj = new Object();
@@ -121,7 +121,7 @@ public class Main {
         }
 
         if(bloqueada) {
-            return ESTADO.FUERA_SERVICIO;
+            return ESTADO.FUERA_DE_SERVICIO;
         }
 
         return ESTADO.DISPONIBLE;
