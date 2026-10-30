@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.util.Properties;
 import java.util.Scanner;
 import java.util.List;
+import java.util.UUID;
 import java.io.IOException;
 
 
@@ -234,7 +235,7 @@ public class Main {
         // Se crea el consumidor local, solo utilizado por este hilo
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, ipBroker + ":" + puertoBroker);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, "engine-" + idWS); // grupo propio por cada engine
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "engine-" + idWS + "-" + UUID.randomUUID()); // grupo nuevo en cada arranque
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");

@@ -5,7 +5,6 @@ import ua.es.central.basedatos.Database;
 import ua.es.central.basedatos.EstacionBD;
 import ua.es.central.basedatos.OperarioBD;
 import ua.es.central.modelo.Estacion;
-import ua.es.central.modelo.Estado;
 import ua.es.central.logica.Comandos;
 import ua.es.central.logica.Riegos;
 
