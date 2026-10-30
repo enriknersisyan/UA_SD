@@ -11,13 +11,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 
+
+import ua.es.central.logica.Comandos;
+
 import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpExchange;
 
 public class PanelWeb {
     private final HttpServer servidor;
     private final EstadoPanel panel;
-    private final OrdenesKafka ordenes;
+    private final Comandos ordenes;
+
 
     // Archivos del panel que se pueden pedir y su tipo (están en src/main/resources/web/)
     private static final Map<String, String[]> ARCHIVOS = Map.of(
@@ -26,7 +30,7 @@ public class PanelWeb {
         "/panel.js",   new String[]{"/web/panel.js",   "text/javascript; charset=utf-8"}
     );
 
-    public PanelWeb(int puerto, EstadoPanel panel, OrdenesKafka ordenes) throws IOException {
+    public PanelWeb(int puerto, EstadoPanel panel, Comandos ordenes) throws IOException {
         this.panel = panel;
         this.ordenes = ordenes;
 

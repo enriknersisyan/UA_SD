@@ -11,7 +11,7 @@
 //    },
 //    "estaciones": [
 //      { "id": "WS-01", "ubicacion": "Parque del Río",
-//        "estado": "DISPONIBLE" | "REGANDO" | "FUGA" | "FUERA_SERVICIO" | "DESCONECTADA",
+//        "estado": "DISPONIBLE" | "REGANDO" | "FUGA" | "FUERA_DE_SERVICIO" | "DESCONECTADA",
 //        "caudal": 11.4, "volumen": 186.0, "operario": "FO-12" | null,
 //        "ultimoRiego": "12:04:11" | null }
 //    ],
@@ -39,7 +39,7 @@ const ETIQUETAS = {
   DISPONIBLE:     "Disponible",
   REGANDO:        "Regando",
   FUGA:           "Fuga",
-  FUERA_SERVICIO: "Fuera de Servicio",
+  FUERA_DE_SERVICIO: "Fuera de Servicio",
   DESCONECTADA:   "Desconectada"
 };
 
@@ -368,8 +368,8 @@ function pintarBotones() {
     return;
   }
   iniciar.disabled  = e.estado !== "DISPONIBLE";                                   // punto 4, pág. 7
-  bloquear.disabled = e.estado === "FUERA_SERVICIO" || e.estado === "DESCONECTADA";
-  activar.disabled  = e.estado !== "FUERA_SERVICIO";
+  bloquear.disabled = e.estado === "FUERA_DE_SERVICIO" || e.estado === "DESCONECTADA";
+  activar.disabled  = e.estado !== "FUERA_DE_SERVICIO";
 }
 
 // Mensajes de la aplicación

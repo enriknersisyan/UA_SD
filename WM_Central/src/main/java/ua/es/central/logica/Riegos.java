@@ -6,10 +6,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import ua.es.central.web.EstadoPanel;
 
 import ua.es.central.basedatos.OperarioBD;
 import ua.es.central.kafka.Productor;
 import ua.es.central.modelo.Estado;
+
+import java.util.Locale;
 
 // Reacciona a los mensajes de Kafka que forman un riego:
 //   FO -> peticion -> Central reserva la estacion (REGANDO) -> AUTORIZACION -> Engine responde
@@ -30,6 +33,7 @@ public class Riegos {
     private final RegistroEstaciones registro;
     private final OperarioBD operarios;
     private final Productor productor;
+    private final EstadoPanel panel;
 
 
     /**
@@ -37,10 +41,11 @@ public class Riegos {
      * @param operarios para comprobar que el operario existe
      * @param productor para enviar mensajes a los FO y al Engine
      */
-    public Riegos(RegistroEstaciones registro, OperarioBD operarios, Productor productor) {
+    public Riegos(RegistroEstaciones registro, OperarioBD operarios, Productor productor, EstadoPanel panel) {
         this.registro = registro;
         this.operarios = operarios;
         this.productor = productor;
+        this.panel = panel;
     }
 
     /**
@@ -70,7 +75,7 @@ public class Riegos {
         switch(c[0]) {
             case "SOLICITUD_RIEGO":   iniciar(LOCAL, c[1], c[3]); break; // SOLICITUD_RIEGO#idWS#LOCAL#duracion
             case "RESP_AUTORIZACION": respuestaAutorizacion(c);   break;
-            case "RIEGO_INICIADO":    System.out.println("Riego iniciado en " + c[1] + " por " + c[2]); break;
+            case "RIEGO_INICIADO":    panel.fase(c[1], "REGANDO"); System.out.println("Riego iniciado en " + c[1] + " por " + c[2]); break;
             case "FIN_RIEGO":         finRiego(c);                break;
             default:                  System.out.println("Evento: " + valor);
         }
@@ -81,6 +86,7 @@ public class Riegos {
      */
     public void telemetria(String valor) {
         String[] c = valor.split("#");
+        panel.telemetria(c[1], Double.parseDouble(c[2]), Double.parseDouble(c[3]));
         if(!c[4].equals(LOCAL)) {
             productor.enviar(Productor.TOPIC_RESPUESTAS, c[4], "TELEMETRIA#" + c[1] + "#" + c[2] + "#" + c[3]);
         }
@@ -95,6 +101,7 @@ public class Riegos {
         } catch(NumberFormatException e) {
             duracion = 0;
         }
+        panel.peticion(operario, idWS, duracion);
         responder(operario, "RECIBIDA#" + idWS);
 
         if(duracion <= 0) {
@@ -116,6 +123,8 @@ public class Riegos {
             denegar(operario, idWS, registro.estado(idWS) == Estado.FUGA ? "FUGA" : "NO_DISPONIBLE");
             return;
         }
+
+        panel.iniciarRiego(idWS, operario);
         Espera espera = new Espera(operario, duracion);
         esperando.put(idWS, espera);
         productor.enviar(Productor.TOPIC_ORDENES, idWS, "AUTORIZACION#" + operario + "#" + duracion);
@@ -132,6 +141,7 @@ public class Riegos {
             return;
         }
         if(c[2].equals("OK")) {
+            panel.fase(c[1], "AUTORIZADA");
             responder(espera.operario(), "AUTORIZADO#" + c[1] + "#" + espera.duracion());
             productor.enviar(Productor.TOPIC_ORDENES, c[1], "INICIAR");
         } else {
@@ -150,9 +160,19 @@ public class Riegos {
         } else if(motivo.equals("BLOQUEO_CENTRAL")) {
             registro.cambiar(c[1], Estado.REGANDO, Estado.FUERA_DE_SERVICIO);
         } // con FUGA, el estado lo pone el monitor al avisar con LEAK
+        panel.terminada(c[1], litros(c[3]) + " L en " + c[4] + " s (" + motivo + ")");
         responder(c[2], "FIN_RIEGO#" + c[1] + "#" + c[3] + "#" + c[4] + "#" + motivo);
     }
-
+    /**
+     * Da formato a un volumen con un decimal; si no es un numero, lo deja como llego
+     */
+    private static String litros(String texto) {
+        try {
+            return String.format(Locale.US, "%.1f", Double.parseDouble(texto));
+        } catch(NumberFormatException e) {
+            return texto;
+        }
+    }
     /** 
      * Si el Engine no contesta en PLAZO_S, se cancela y se libera la estacion
      */
@@ -174,7 +194,7 @@ public class Riegos {
      * Cada paso se muestra en la pantalla de Central y, si hay FO, se le envia
      */
     private void responder(String operario, String mensaje) {
-        System.out.println("Riego [" + operario + "] " + mensaje);
+        panel.anotar("Riego [" + operario + "] " + mensaje);
         if(!operario.equals(LOCAL)) {
             productor.enviar(Productor.TOPIC_RESPUESTAS, operario, mensaje);
         }
@@ -183,6 +203,7 @@ public class Riegos {
      * Deniega un riego: se envia al FO y se muestra en la pantalla de Central
      */
     private void denegar(String operario, String idWS, String motivo) {
+        panel.denegada(idWS, operario, motivo);
         responder(operario, "DENEGADO#" + idWS + "#" + motivo);
     }
 }

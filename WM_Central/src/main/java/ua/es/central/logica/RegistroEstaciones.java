@@ -4,6 +4,7 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 
 import ua.es.central.modelo.Estacion;
 import ua.es.central.modelo.Estado;
@@ -13,7 +14,15 @@ public class RegistroEstaciones {
 	 private final Map<String, Estado> estados = new ConcurrentHashMap<>();
     
      private final EstacionBD bd;
-     
+     private BiConsumer<String, Estado> oyente;
+
+     /**
+      * Registra quien quiere enterarse de cada cambio de estado de una estacion
+      */
+     public void alCambiar(BiConsumer<String, Estado> oyente) {
+        this.oyente = oyente;
+     }
+
      /** 
       * Crea un registro de estaciones con la base de datos dada
       * @param bd base de datos de estaciones
@@ -113,6 +122,9 @@ public class RegistroEstaciones {
             bd.actualizarEstado(id, estado);
         } catch (SQLException e) {
             System.out.println("Error al actualizar el estado de la estacion " + id + ": " + e.getMessage());
+        }
+        if(oyente != null) {
+            oyente.accept(id, estado);
         }
     }   
 }

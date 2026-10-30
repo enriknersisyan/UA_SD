@@ -7,6 +7,8 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
 
+import java.util.function.Consumer;
+
 // Un unico productor para todo Central. KafkaProducer es seguro entre hilos.
 public class Productor {
     public static final String TOPIC_ORDENES = "topicOrdenes";       // Central -> Engine
@@ -14,7 +16,7 @@ public class Productor {
     public static final String TOPIC_ESTADOS = "topicEstados";       // Central -> todos los FO
 
     private final KafkaProducer<String, String> productor;
-
+    private Consumer<Boolean> oyente; // se le dice true o false segun el resultado de cada envio
     
     
     /**
@@ -43,7 +45,16 @@ public class Productor {
             if(error != null) {
                 System.out.println("Error enviando a " + topic + ": " + error.getMessage());
             }
+            if(oyente != null) {
+                oyente.accept(error == null);
+            }
         });
+    }
+    /**
+     * Registra quien quiere saber si el ultimo envio a Kafka funciono (por ejemplo, el panel)
+     */
+    public void alCambiarConexion(Consumer<Boolean> oyente) {
+        this.oyente = oyente;
     }
 
     // Envia lo que quede pendiente y cierra

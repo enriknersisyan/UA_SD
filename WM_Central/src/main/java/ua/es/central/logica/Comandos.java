@@ -5,6 +5,7 @@ import java.util.Scanner;
 
 import ua.es.central.kafka.Productor;
 import ua.es.central.modelo.Estado;
+import ua.es.central.web.EstadoPanel;
 
 /**
  * Menu de comandos de Central (punto 11 del enunciado): iniciar un riego, bloquear y activar una estacion
@@ -13,16 +14,19 @@ public class Comandos implements Runnable {
     private final RegistroEstaciones registro;
     private final Riegos riegos;
     private final Productor productor;
+    private final EstadoPanel panel;
 
     /**
      * @param registro para cambiar el estado de la estacion
      * @param riegos para iniciar un riego desde Central
      * @param productor para enviar mensajes a los FO y al Engine
+     * @param panel para mostrar el estado de las estaciones
      */
-    public Comandos(RegistroEstaciones registro, Riegos riegos, Productor productor) {
+    public Comandos(RegistroEstaciones registro, Riegos riegos, Productor productor, EstadoPanel panel) {
         this.registro = registro;
         this.riegos = riegos;
         this.productor = productor;
+        this.panel = panel;
     }
 
     /**
@@ -57,28 +61,33 @@ public class Comandos implements Runnable {
         return sc.nextLine().trim();
     }
     /**
-     * Inicia un riego desde Central (sin FO al que avisar). Cambia el estado de la estacion a REGANDO y envia
-     * un mensaje al Engine con la duracion del riego. Si la estacion no esta DISPONIBLE, no hace nada.
+     * Pide al usuario el ID de la estacion y la duracion del riego, y llama a iniciar(id, duracion)
      */
     private void iniciar(Scanner sc) {
         String id = pedirId(sc);
         System.out.println("Duracion (s): ");
         try {
-            int duracion = Integer.parseInt(sc.nextLine().trim());
-            if(registro.estado(id) == null) {
-                System.out.println("Estacion desconocida: " + id);
-                return;
-            }
-            riegos.desdeCentral(id, duracion);
+            iniciar(id, Integer.parseInt(sc.nextLine().trim()));
         } catch(NumberFormatException e) {
             System.out.println("Duracion no valida");
         }
     }
 
     /**
+     * Inicia un riego desde Central. Lo usan el menu y el panel web.
+     */
+    public void iniciar(String id, int duracion) {
+        if(registro.estado(id) == null) {
+            panel.anotar("Estacion desconocida: " + id);
+            return;
+        }
+        riegos.desdeCentral(id, duracion);
+    }
+
+    /**
      * Una estacion disponible o regando pasa a FUERA_DE_SERVICIO; el Engine corta el riego si lo hay
      */
-    private void bloquear(String id) {
+    public void bloquear(String id) {
         Estado actual = registro.estado(id);
         if(actual != Estado.DISPONIBLE && actual != Estado.REGANDO) {
             System.out.println("No se puede bloquear " + id + " (estado " + actual + ")");
@@ -90,21 +99,21 @@ public class Comandos implements Runnable {
          */
         if(registro.cambiar(id, actual, Estado.FUERA_DE_SERVICIO)) {
             productor.enviar(Productor.TOPIC_ORDENES, id, "BLOQUEAR");
-            System.out.println("Bloqueo enviado a " + id);
+            panel.anotar("Bloqueo enviado a " + id);
         } else {
-            System.out.println("El estado de " + id + " cambio justo ahora, repite el comando");
+            panel.anotar("El estado de " + id + " cambio justo ahora, repite el comando");
         }
     }
 
     /**
      * Solo una estacion fuera de servicio vuelve a DISPONIBLE
      */
-    private void activar(String id) {
+    public void activar(String id) {
         if(registro.cambiar(id, Estado.FUERA_DE_SERVICIO, Estado.DISPONIBLE)) {
             productor.enviar(Productor.TOPIC_ORDENES, id, "ACTIVAR");
-            System.out.println("Activacion enviada a " + id);
+            panel.anotar("Activacion enviada a " + id);
         } else {
-            System.out.println("No se puede activar " + id + " (estado " + registro.estado(id) + ")");
+            panel.anotar("No se puede activar " + id + " (estado " + registro.estado(id) + ")");
         }
     }
 }

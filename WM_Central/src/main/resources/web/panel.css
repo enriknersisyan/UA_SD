@@ -185,7 +185,7 @@ td.texto-suave { color: var(--tinta-suave); }
 .estado-disponible     { background: var(--verde-fondo);   color: var(--verde); }
 .estado-regando        { background: var(--verde-fondo);   color: var(--verde); }
 .estado-fuga           { background: var(--rojo-fondo);    color: var(--rojo); }
-.estado-fuera_servicio { background: var(--naranja-fondo); color: var(--naranja); }
+.estado-fuera_de_servicio { background: var(--naranja-fondo); color: var(--naranja); }
 .estado-desconectada   { background: var(--gris-fondo);    color: var(--gris); }
 
 /* Verde parpadeando para "Regando" (solo en tabla y detalle, no en el recuento) */
