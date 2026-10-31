@@ -39,11 +39,11 @@ Java 21 · Maven · Apache Kafka · SQLite · Docker · Railway
 
 | Integrante | Responsabilidades |
 |---|---|
-| **Juan** | `WM_WS_E` (Engine de las estaciones de riego) |
+| **Juan Roca de Togores Ginestar** | `WM_WS_E` (Engine de las estaciones de riego) |
 | | `WM_WS_M` (Monitor de las estaciones de riego) |
 | | `WM_FO` (aplicación de los operarios de campo) |
 | | Panel web de monitorización de CENTRAL (HTML, CSS, JavaScript y su integración con CENTRAL) |
-| **Enrik** | `WM_Central` (lógica central, base de datos y servidor de sockets) |
+| **Enrik Nersisian** | `WM_Central` (lógica central, base de datos y servidor de sockets) |
 | | Integración con Kafka |
 | | Despliegue con Docker y Railway |
 | | Corrección de errores críticos |
