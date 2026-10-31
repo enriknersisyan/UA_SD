@@ -71,6 +71,19 @@ public class EstadoPanel {
         filas.put(id, new Fila(id, ubicacion));
     }
 
+    // Quitar la fila de una estación borrada
+    public synchronized void quitar(String id) {
+        filas.remove(id);
+    }
+
+    // Cambiar la ubicación que se muestra
+    public synchronized void cambiarUbicacion(String id, String ubicacion) {
+        Fila f = filas.get(id);
+        if(f != null) {
+            f.ubicacion = ubicacion;
+        }
+    }
+
     // Comprobar si existe una fila con esa id
     public synchronized boolean existe(String id) {
         return filas.containsKey(id);

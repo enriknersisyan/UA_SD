@@ -1,5 +1,6 @@
 package ua.es.central.logica;
 
+import java.sql.SQLException;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
 
@@ -11,6 +12,9 @@ import ua.es.central.web.EstadoPanel;
  * Menu de comandos de Central (punto 11 del enunciado): iniciar un riego, bloquear y activar una estacion
  */
 public class Comandos implements Runnable {
+    // Resultado de una orden de gestion: si salio bien y el mensaje para mostrar
+    public record Resultado(boolean ok, String mensaje) {}
+
     private final RegistroEstaciones registro;
     private final Riegos riegos;
     private final Productor productor;
@@ -38,6 +42,7 @@ public class Comandos implements Runnable {
         try {
             for(;;) {
                 System.out.println("\nCOMANDOS: [1] Iniciar riego  [2] Bloquear estacion  [3] Activar estacion");
+                System.out.println("          [4] Anadir estacion  [5] Cambiar ubicacion  [6] Borrar estacion");
                 String opcion = sc.nextLine().trim();
                 if(opcion.equals("1")) {
                     iniciar(sc);
@@ -45,6 +50,16 @@ public class Comandos implements Runnable {
                     bloquear(pedirId(sc));
                 } else if(opcion.equals("3")) {
                     activar(pedirId(sc));
+                } else if(opcion.equals("4")) {
+                    String id = pedirId(sc);
+                    System.out.println("Ubicacion: ");
+                    System.out.println(anadirEstacion(id, sc.nextLine().trim()).mensaje());
+                } else if(opcion.equals("5")) {
+                    String id = pedirId(sc);
+                    System.out.println("Nueva ubicacion: ");
+                    System.out.println(cambiarUbicacion(id, sc.nextLine().trim()).mensaje());
+                } else if(opcion.equals("6")) {
+                    System.out.println(borrarEstacion(pedirId(sc)).mensaje());
                 } else {
                     System.out.println("Opcion no valida");
                 }
@@ -115,5 +130,79 @@ public class Comandos implements Runnable {
         } else {
             panel.anotar("No se puede activar " + id + " (estado " + registro.estado(id) + ")");
         }
+    }
+
+    // ---------- Gestion de estaciones (alta, cambio de ubicacion y baja) ----------
+
+    // IDs con letras, numeros, guion o guion bajo: el # romperia los mensajes de los sockets y de Kafka
+    private static boolean idValido(String id) {
+        return id != null && id.matches("[A-Za-z0-9_-]{1,20}");
+    }
+
+    // Ubicacion no vacia y sin # ni ; (separadores de los mensajes y del CSV)
+    private static boolean ubicacionValida(String ubicacion) {
+        return ubicacion != null && !ubicacion.isBlank() && ubicacion.length() <= 60
+            && !ubicacion.contains("#") && !ubicacion.contains(";");
+    }
+
+    /**
+     * Da de alta una estacion nueva. Aparece DESCONECTADA hasta que se registre su Monitor.
+     */
+    public Resultado anadirEstacion(String id, String ubicacion) {
+        if(!idValido(id)) {
+            return new Resultado(false, "ID no valido: solo letras, numeros, - y _ (maximo 20)");
+        }
+        if(!ubicacionValida(ubicacion)) {
+            return new Resultado(false, "Ubicacion no valida: no puede estar vacia ni llevar # o ;");
+        }
+        try {
+            if(!registro.anadir(id, ubicacion.trim())) {
+                return new Resultado(false, "Ya existe una estacion " + id);
+            }
+        } catch(SQLException e) {
+            return new Resultado(false, "Error de la base de datos: " + e.getMessage());
+        }
+        panel.cargar(id, ubicacion.trim());
+        panel.anotar("Estacion " + id + " dada de alta en " + ubicacion.trim());
+        return new Resultado(true, "Estacion " + id + " dada de alta");
+    }
+
+    /**
+     * Cambia la ubicacion de una estacion
+     */
+    public Resultado cambiarUbicacion(String id, String ubicacion) {
+        if(!ubicacionValida(ubicacion)) {
+            return new Resultado(false, "Ubicacion no valida: no puede estar vacia ni llevar # o ;");
+        }
+        try {
+            if(!registro.cambiarUbicacion(id, ubicacion.trim())) {
+                return new Resultado(false, "No existe la estacion " + id);
+            }
+        } catch(SQLException e) {
+            return new Resultado(false, "Error de la base de datos: " + e.getMessage());
+        }
+        panel.cambiarUbicacion(id, ubicacion.trim());
+        panel.anotar("Estacion " + id + " ahora esta en " + ubicacion.trim());
+        return new Resultado(true, "Ubicacion de " + id + " cambiada");
+    }
+
+    /**
+     * Borra una estacion. Solo si esta DESCONECTADA: con su Monitor conectado o regando no se puede.
+     */
+    public Resultado borrarEstacion(String id) {
+        Estado actual = registro.estado(id);
+        if(actual == null) {
+            return new Resultado(false, "No existe la estacion " + id);
+        }
+        try {
+            if(!registro.borrar(id)) {
+                return new Resultado(false, "Solo se puede borrar una estacion desconectada (" + id + " esta " + registro.estado(id) + ")");
+            }
+        } catch(SQLException e) {
+            return new Resultado(false, "Error de la base de datos: " + e.getMessage());
+        }
+        panel.quitar(id);
+        panel.anotar("Estacion " + id + " borrada");
+        return new Resultado(true, "Estacion " + id + " borrada");
     }
 }

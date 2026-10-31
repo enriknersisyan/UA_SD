@@ -38,6 +38,7 @@ public class PanelWeb {
         servidor.createContext("/", this::pagina);
         servidor.createContext("/api/estado", this::estado);
         servidor.createContext("/api/orden", this::orden);
+        servidor.createContext("/api/estacion", this::estacion);
         servidor.setExecutor(Executors.newFixedThreadPool(4));   // varias peticiones a la vez
     }
 
@@ -135,6 +136,31 @@ public class PanelWeb {
             default:
                 responderOrden(ex, 400, false, "Acción desconocida: " + accion);
         }
+    }
+
+    // POST /api/estacion <- accion=ANADIR|UBICACION|BORRAR, id, ubicacion: gestión de estaciones
+    private void estacion(HttpExchange ex) throws IOException {
+        if(!ex.getRequestMethod().equals("POST")) {
+            responderOrden(ex, 405, false, "Método no permitido");
+            return;
+        }
+
+        String cuerpo = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        Map<String, String> p = leerFormulario(cuerpo);
+        String accion = p.getOrDefault("accion", "");
+        String id = p.getOrDefault("id", "").trim();
+        String ubicacion = p.getOrDefault("ubicacion", "");
+
+        Comandos.Resultado r;
+        switch(accion) {
+            case "ANADIR":    r = ordenes.anadirEstacion(id, ubicacion);   break;
+            case "UBICACION": r = ordenes.cambiarUbicacion(id, ubicacion); break;
+            case "BORRAR":    r = ordenes.borrarEstacion(id);              break;
+            default:
+                responderOrden(ex, 400, false, "Acción desconocida: " + accion);
+                return;
+        }
+        responderOrden(ex, r.ok() ? 200 : 400, r.ok(), r.mensaje());
     }
 
     // Lee "accion=INICIAR&idWS=WS-01&duracion=30" y lo convierte en un mapa
