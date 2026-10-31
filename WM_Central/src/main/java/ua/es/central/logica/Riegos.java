@@ -30,6 +30,10 @@ public class Riegos {
     private final Map<String, Espera> esperando = new ConcurrentHashMap<>();
     private final ScheduledExecutorService plazos = Executors.newSingleThreadScheduledExecutor();
 
+    // Riegos autorizados y aun sin terminar: estacion -> operario. Sirve para avisar al FO
+    // si su estacion se averia o se desconecta en mitad del riego.
+    private final Map<String, String> enCurso = new ConcurrentHashMap<>();
+
     private final RegistroEstaciones registro;
     private final OperarioBD operarios;
     private final Productor productor;
@@ -65,6 +69,21 @@ public class Riegos {
      */
     public void desdeCentral(String idWS, int duracion) {
         iniciar(LOCAL, idWS, String.valueOf(duracion));
+    }
+
+    /**
+     * Cambio de estado de una estacion (lo avisa el registro). Si se averia o se desconecta
+     * durante un riego, se avisa al FO que lo pidio: AVERIA#idWS#estado.
+     * El resumen llegara despues, cuando el Engine se recupere y envie su FIN_RIEGO.
+     */
+    public void cambioEstado(String idWS, Estado estado) {
+        if(estado != Estado.FUGA && estado != Estado.DESCONECTADA) {
+            return;
+        }
+        String operario = enCurso.remove(idWS); // remove: se avisa una sola vez
+        if(operario != null) {
+            responder(operario, "AVERIA#" + idWS + "#" + estado);
+        }
     }
 
     /**
@@ -142,6 +161,7 @@ public class Riegos {
         }
         if(c[2].equals("OK")) {
             panel.fase(c[1], "AUTORIZADA");
+            enCurso.put(c[1], espera.operario());
             responder(espera.operario(), "AUTORIZADO#" + c[1] + "#" + espera.duracion());
             productor.enviar(Productor.TOPIC_ORDENES, c[1], "INICIAR");
         } else {
@@ -155,6 +175,7 @@ public class Riegos {
      */
     private void finRiego(String[] c) {
         String motivo = c[5];
+        enCurso.remove(c[1]);
         if(motivo.equals("LIMITE_TIEMPO") || motivo.equals("PARADA_MANUAL")) {
             registro.cambiar(c[1], Estado.REGANDO, Estado.DISPONIBLE);
         } else if(motivo.equals("BLOQUEO_CENTRAL")) {

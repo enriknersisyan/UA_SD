@@ -66,4 +66,25 @@ public class EstacionBD{
 			}
 		}
 	}
+	// Borra una estacion. Devuelve si existia
+	public boolean borrar(String id) throws SQLException {
+		synchronized(conexion){
+			String sql = "DELETE FROM estacion WHERE id = ?";
+			try(PreparedStatement ps = conexion.prepareStatement(sql)){
+				ps.setString(1, id);
+				return ps.executeUpdate() > 0;
+			}
+		}
+	}
+	// Cambia la ubicacion de una estacion. Devuelve si existia
+	public boolean cambiarUbicacion(String id, String ubicacion) throws SQLException {
+		synchronized(conexion){
+			String sql = "UPDATE estacion SET ubicacion = ? WHERE id = ?";
+			try(PreparedStatement ps = conexion.prepareStatement(sql)){
+				ps.setString(1, ubicacion);
+				ps.setString(2, id);
+				return ps.executeUpdate() > 0;
+			}
+		}
+	}
 }

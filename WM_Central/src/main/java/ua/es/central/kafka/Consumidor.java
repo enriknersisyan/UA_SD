@@ -33,9 +33,13 @@ public class Consumidor implements Runnable {
     public void run() {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, broker);
-        // Grupo nuevo en cada arranque: asi "latest" se aplica siempre y no se retoma
-        // desde el offset guardado, que reprocesaria peticiones hechas con Central apagado
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, "central-" + System.currentTimeMillis());
+        // Grupo fijo: Kafka recuerda por donde iba leyendo Central, asi que al reiniciarse procesa
+        // lo que llego mientras estaba caida (no se pierde ninguna transaccion). "latest" solo
+        // se usa la primera vez, cuando el grupo aun no tiene nada guardado.
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "central");
+        // Miembro estatico: al reiniciarse tras una caida, ocupa su sitio al momento en vez de
+        // esperar a que Kafka de por muerta a la instancia anterior (unos 45 s)
+        props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "central-1");
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());

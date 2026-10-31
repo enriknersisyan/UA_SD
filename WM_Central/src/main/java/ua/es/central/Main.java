@@ -121,6 +121,7 @@ public class Main {
         Runtime.getRuntime().addShutdownHook(new Thread(productor::close));
         
         Riegos riegos = new Riegos(registro, operarios, productor, panel);
+        registro.alCambiar(riegos::cambioEstado); // avisar al FO si su estacion se averia durante el riego
         new Thread(new Consumidor(broker, riegos)).start();
         Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(
             () -> publicarEstados(productor, estaciones, registro), 0, PERIODO_ESTADOS_S, TimeUnit.SECONDS);

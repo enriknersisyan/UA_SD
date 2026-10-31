@@ -4,6 +4,7 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiConsumer;
 
 import ua.es.central.modelo.Estacion;
@@ -14,13 +15,14 @@ public class RegistroEstaciones {
 	 private final Map<String, Estado> estados = new ConcurrentHashMap<>();
     
      private final EstacionBD bd;
-     private BiConsumer<String, Estado> oyente;
+     private final List<BiConsumer<String, Estado>> oyentes = new CopyOnWriteArrayList<>();
 
      /**
-      * Registra quien quiere enterarse de cada cambio de estado de una estacion
+      * Registra a alguien que quiere enterarse de cada cambio de estado de una estacion
+      * (el panel, la logica de riegos...). Puede haber varios.
       */
      public void alCambiar(BiConsumer<String, Estado> oyente) {
-        this.oyente = oyente;
+        oyentes.add(oyente);
      }
 
      /** 
@@ -104,6 +106,47 @@ public class RegistroEstaciones {
         return true;
     }
     /**
+     * Da de alta una estacion nueva. Queda DESCONECTADA hasta que se registre su Monitor.
+     * @return false si ya existe una estacion con ese id
+     */
+    public boolean anadir(String id, String ubicacion) throws SQLException {
+        if(estados.putIfAbsent(id, Estado.DESCONECTADA) != null) {
+            return false;
+        }
+        try {
+            bd.insertar(new Estacion(id, ubicacion, Estado.DESCONECTADA));
+        } catch(SQLException e) {
+            estados.remove(id); // no se pudo guardar: se deshace
+            throw e;
+        }
+        return true;
+    }
+
+    /**
+     * Borra una estacion, solo si esta DESCONECTADA (sin Monitor ni riego). El borrado es atomico:
+     * si a la vez se registra su Monitor, solo uno de los dos lo consigue.
+     * @return false si no existe o no esta desconectada
+     */
+    public boolean borrar(String id) throws SQLException {
+        if(!estados.remove(id, Estado.DESCONECTADA)) {
+            return false;
+        }
+        bd.borrar(id);
+        return true;
+    }
+
+    /**
+     * Cambia la ubicacion de una estacion (se puede en cualquier estado)
+     * @return false si no existe
+     */
+    public boolean cambiarUbicacion(String id, String ubicacion) throws SQLException {
+        if(!estados.containsKey(id)) {
+            return false;
+        }
+        return bd.cambiarUbicacion(id, ubicacion);
+    }
+
+    /**
      * Cambia el estado de la estacion a DESCONECTADA y lo guarda en la BD
      * @param id id de la estacion
      */
@@ -123,7 +166,7 @@ public class RegistroEstaciones {
         } catch (SQLException e) {
             System.out.println("Error al actualizar el estado de la estacion " + id + ": " + e.getMessage());
         }
-        if(oyente != null) {
+        for(BiConsumer<String, Estado> oyente : oyentes) {
             oyente.accept(id, estado);
         }
     }   
