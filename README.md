@@ -8,6 +8,13 @@ mientras los **operarios de campo** solicitan riegos desde su aplicación. Todo 
 funciona de forma asíncrona y en tiempo real, combinando **sockets** (registro y salud de las
 estaciones) y **Kafka** (peticiones, órdenes, telemetría y resultados de los riegos).
 
+## Índice
+
+1. [Módulos](#módulos)
+2. [Tecnologías](#tecnologías)
+3. [Despliegue](#despliegue)
+4. [Reparto del trabajo](#reparto-del-trabajo)
+
 ## Módulos
 
 | Módulo | Descripción |
@@ -40,3 +47,4 @@ Java 21 · Maven · Apache Kafka · SQLite · Docker · Railway
 | | Integración con Kafka |
 | | Despliegue con Docker y Railway |
 | | Corrección de errores críticos |
+| **En común** | Memoria de la práctica |
