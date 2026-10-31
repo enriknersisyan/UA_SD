@@ -11,7 +11,7 @@
 //    },
 //    "estaciones": [
 //      { "id": "WS-01", "ubicacion": "Parque del Río",
-//        "estado": "DISPONIBLE" | "REGANDO" | "FUGA" | "FUERA_SERVICIO" | "DESCONECTADA",
+//        "estado": "DISPONIBLE" | "REGANDO" | "FUGA" | "FUERA_DE_SERVICIO" | "DESCONECTADA",
 //        "caudal": 11.4, "volumen": 186.0, "operario": "FO-12" | null,
 //        "ultimoRiego": "12:04:11" | null }
 //    ],
@@ -30,26 +30,26 @@
 
 // ---------------- Configuración ----------------
 const API_ESTADO = "/api/estado";
-const API_ORDEN  = "/api/orden";
+const API_ORDEN = "/api/orden";
 const PERIODO_MS = 1000;            // cada segundo (punto 7, pág. 7)
 const MAX_EVENTOS = 100;
 
 // Los 5 estados del enunciado (pág. 4), con los mismos nombres que usa el Engine
 const ETIQUETAS = {
-  DISPONIBLE:     "Disponible",
-  REGANDO:        "Regando",
-  FUGA:           "Fuga",
-  FUERA_SERVICIO: "Fuera de Servicio",
-  DESCONECTADA:   "Desconectada"
+    DISPONIBLE: "Disponible",
+    REGANDO: "Regando",
+    FUGA: "Fuga",
+    FUERA_DE_SERVICIO: "Fuera de Servicio",
+    DESCONECTADA: "Desconectada"
 };
 
 // Fases de una petición de riego (puntos 4 a 8, pág. 7)
 const FASES = {
-  RECIBIDA:   "Recibida",     // CENTRAL la está comprobando
-  AUTORIZADA: "Autorizada",   // la WS ha aceptado, falta abrir la válvula
-  REGANDO:    "Regando",
-  TERMINADA:  "Terminada",
-  DENEGADA:   "Denegada"
+    RECIBIDA: "Recibida",     // CENTRAL la está comprobando
+    AUTORIZADA: "Autorizada",   // la WS ha aceptado, falta abrir la válvula
+    REGANDO: "Regando",
+    TERMINADA: "Terminada",
+    DENEGADA: "Denegada"
 };
 const FASES_FINALES = ["TERMINADA", "DENEGADA"];
 
@@ -67,332 +67,375 @@ let ultimaActualizacion = null;     // hora de la última respuesta correcta
 const $ = (id) => document.getElementById(id);
 
 function formatear(n, dec = 1) {
-  if (n === null || n === undefined || isNaN(n)) return "—";
-  return Number(n).toLocaleString("es-ES", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+    if (n === null || n === undefined || isNaN(n)) return "—";
+    return Number(n).toLocaleString("es-ES", { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 
 // textContent: los datos recibidos nunca se interpretan como HTML
 function crear(etiqueta, texto, clase) {
-  const el = document.createElement(etiqueta);
-  if (texto !== undefined) el.textContent = texto;
-  if (clase) el.className = clase;
-  return el;
+    const el = document.createElement(etiqueta);
+    if (texto !== undefined) el.textContent = texto;
+    if (clase) el.className = clase;
+    return el;
 }
 
 function etiquetaEstado(estado) {
-  return crear("span", ETIQUETAS[estado] || estado, "estado estado-" + String(estado).toLowerCase());
+    return crear("span", ETIQUETAS[estado] || estado, "estado estado-" + String(estado).toLowerCase());
 }
 
 function etiquetaFase(fase) {
-  return crear("span", FASES[fase] || fase, "fase fase-" + String(fase).toLowerCase());
+    return crear("span", FASES[fase] || fase, "fase fase-" + String(fase).toLowerCase());
 }
 
 // Añade una pareja "nombre: valor" a una lista <dl>
 function filaDatos(dl, nombre, valor, claseValor) {
-  dl.append(crear("dt", nombre), crear("dd", valor, claseValor));
+    dl.append(crear("dt", nombre), crear("dd", valor, claseValor));
 }
 
 // ---------------- Leer el estado de CENTRAL ----------------
 async function actualizar() {
-  try {
-    const r = await fetch(API_ESTADO, { cache: "no-store" });
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    const datos = await r.json();
+    try {
+        const r = await fetch(API_ESTADO, { cache: "no-store" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const datos = await r.json();
 
-    central    = datos.central || {};
-    estaciones = Array.isArray(datos.estaciones) ? datos.estaciones : [];
-    peticiones = Array.isArray(datos.peticiones) ? datos.peticiones : [];
+        central = datos.central || {};
+        estaciones = Array.isArray(datos.estaciones) ? datos.estaciones : [];
+        peticiones = Array.isArray(datos.peticiones) ? datos.peticiones : [];
 
-    // CENTRAL envía los eventos del más antiguo al más reciente:
-    // se añaden arriba solo los que no se habían visto
-    for (const e of (datos.eventos || [])) {
-      if (eventosVistos.has(e.id)) continue;
-      eventosVistos.add(e.id);
-      eventos.unshift({ hora: e.hora, texto: e.texto });
+        // CENTRAL envía los eventos del más antiguo al más reciente:
+        // se añaden arriba solo los que no se habían visto
+        for (const e of (datos.eventos || [])) {
+            if (eventosVistos.has(e.id)) continue;
+            eventosVistos.add(e.id);
+            eventos.unshift({ hora: e.hora, texto: e.texto });
+        }
+        eventos = eventos.slice(0, MAX_EVENTOS);
+
+        ultimaActualizacion = new Date().toLocaleTimeString("es-ES");
+        marcarConexion(true);
+    } catch (err) {
+        marcarConexion(false);   // se mantienen los últimos datos recibidos
     }
-    eventos = eventos.slice(0, MAX_EVENTOS);
-
-    ultimaActualizacion = new Date().toLocaleTimeString("es-ES");
-    marcarConexion(true);
-  } catch (err) {
-    marcarConexion(false);   // se mantienen los últimos datos recibidos
-  }
-  pintar();
+    pintar();
 }
 
 function marcarConexion(ok) {
-  conectado = ok;
-  const el = $("conexion");
-  el.className = "conexion " + (ok ? "ok" : "error");
-  el.textContent = ok ? "Conectado a CENTRAL" : "Sin conexión con CENTRAL";
-  $("aviso").hidden = ok;
+    conectado = ok;
+    const el = $("conexion");
+    el.className = "conexion " + (ok ? "ok" : "error");
+    el.textContent = ok ? "Conectado a CENTRAL" : "Sin conexión con CENTRAL";
+    $("aviso").hidden = ok;
 }
 
 // ---------------- Enviar órdenes (punto 11, pág. 8) ----------------
 async function enviarOrden(accion) {
-  const destino = document.querySelector('input[name="destino"]:checked').value;
-  const idWS = destino === "todas" ? "TODAS" : seleccion;
+    const destino = document.querySelector('input[name="destino"]:checked').value;
+    const idWS = destino === "todas" ? "TODAS" : seleccion;
 
-  if (!idWS) {
-    mostrarRespuesta("Selecciona una estación en la tabla o elige «Todas».");
-    return;
-  }
-
-  const cuerpo = new URLSearchParams({ accion, idWS });
-
-  if (accion === "INICIAR") {
-    const duracion = parseInt($("duracion").value, 10);
-    if (!Number.isInteger(duracion) || duracion <= 0) {
-      mostrarRespuesta("Escribe una duración en segundos mayor que 0.");
-      $("duracion").focus();
-      return;
+    if (!idWS) {
+        mostrarRespuesta("Selecciona una estación en la tabla o elige «Todas».");
+        return;
     }
-    cuerpo.append("duracion", String(duracion));
-  }
 
-  try {
-    const r = await fetch(API_ORDEN, { method: "POST", body: cuerpo });
-    const datos = await r.json().catch(() => ({}));
-    mostrarRespuesta(datos.mensaje || (r.ok ? "Orden enviada." : "CENTRAL ha rechazado la orden (HTTP " + r.status + ")."));
-  } catch (err) {
-    mostrarRespuesta("No se ha podido enviar la orden: CENTRAL no responde.");
-  }
-  actualizar();
+    const cuerpo = new URLSearchParams({ accion, idWS });
+
+    if (accion === "INICIAR") {
+        const duracion = parseInt($("duracion").value, 10);
+        if (!Number.isInteger(duracion) || duracion <= 0) {
+            mostrarRespuesta("Escribe una duración en segundos mayor que 0.");
+            $("duracion").focus();
+            return;
+        }
+        cuerpo.append("duracion", String(duracion));
+    }
+
+    try {
+        const r = await fetch(API_ORDEN, { method: "POST", body: cuerpo });
+        const datos = await r.json().catch(() => ({}));
+        mostrarRespuesta(datos.mensaje || (r.ok ? "Orden enviada." : "CENTRAL ha rechazado la orden (HTTP " + r.status + ")."));
+    } catch (err) {
+        mostrarRespuesta("No se ha podido enviar la orden: CENTRAL no responde.");
+    }
+    actualizar();
 }
 
 function mostrarRespuesta(texto) {
-  $("respuesta").textContent = texto;
+    $("respuesta").textContent = texto;
 }
 
 // ---------------- Pintar la página ----------------
 function pintar() {
-  pintarResumen();
-  pintarTabla();
-  pintarPeticiones();
-  pintarCentral();
-  pintarDetalle();
-  pintarBotones();
-  pintarEventos();
+    pintarResumen();
+    pintarTabla();
+    pintarPeticiones();
+    pintarCentral();
+    pintarDetalle();
+    pintarBotones();
+    pintarEventos();
 }
 
 // Recuento de estaciones por estado
 function pintarResumen() {
-  const lista = $("resumen");
-  lista.replaceChildren();
-  for (const estado of Object.keys(ETIQUETAS)) {
-    const n = estaciones.filter(e => e.estado === estado).length;
-    const li = crear("li", undefined, "estado-" + estado.toLowerCase());
-    li.append(crear("strong", String(n)), crear("span", ETIQUETAS[estado]));
-    lista.append(li);
-  }
+    const lista = $("resumen");
+    lista.replaceChildren();
+    for (const estado of Object.keys(ETIQUETAS)) {
+        const n = estaciones.filter(e => e.estado === estado).length;
+        const li = crear("li", undefined, "estado-" + estado.toLowerCase());
+        li.append(crear("strong", String(n)), crear("span", ETIQUETAS[estado]));
+        lista.append(li);
+    }
 }
 
 // Tabla de estaciones: ID, ubicación, estado, caudal, volumen y operario (pág. 4)
 function pintarTabla() {
-  const cuerpo = $("tabla");
-  cuerpo.replaceChildren();
-  $("tabla-vacia").hidden = estaciones.length > 0;
+    const cuerpo = $("tabla");
+    cuerpo.replaceChildren();
+    $("tabla-vacia").hidden = estaciones.length > 0;
 
-  const ordenadas = [...estaciones].sort((a, b) => a.id.localeCompare(b.id, "es", { numeric: true }));
+    const ordenadas = [...estaciones].sort((a, b) => a.id.localeCompare(b.id, "es", { numeric: true }));
 
-  for (const e of ordenadas) {
-    const fila = document.createElement("tr");
-    fila.tabIndex = 0;
-    if (e.id === seleccion) {
-      fila.classList.add("seleccionada");
-      fila.setAttribute("aria-selected", "true");
+    for (const e of ordenadas) {
+        const fila = document.createElement("tr");
+        fila.tabIndex = 0;
+        if (e.id === seleccion) {
+            fila.classList.add("seleccionada");
+            fila.setAttribute("aria-selected", "true");
+        }
+
+        const regando = e.estado === "REGANDO";
+        const sinDatos = e.estado === "DESCONECTADA";   // no se puede monitorizar (pág. 4)
+
+        const celdaEstado = document.createElement("td");
+        celdaEstado.append(etiquetaEstado(e.estado));
+
+        fila.append(
+            crear("td", e.id),
+            crear("td", e.ubicacion || "—"),
+            celdaEstado,
+            crear("td", sinDatos ? "—" : formatear(regando ? e.caudal : 0), "numero"),
+            crear("td", sinDatos ? "—" : formatear(regando ? e.volumen : 0), "numero"),
+            crear("td", regando && e.operario ? e.operario : "—")
+        );
+
+        // Seleccionar con clic o con teclado
+        fila.addEventListener("click", () => seleccionar(e.id));
+        fila.addEventListener("keydown", (ev) => {
+            if (ev.key === "Enter" || ev.key === " ") {
+                ev.preventDefault();
+                seleccionar(e.id);
+            }
+        });
+        cuerpo.append(fila);
     }
-
-    const regando = e.estado === "REGANDO";
-    const sinDatos = e.estado === "DESCONECTADA";   // no se puede monitorizar (pág. 4)
-
-    const celdaEstado = document.createElement("td");
-    celdaEstado.append(etiquetaEstado(e.estado));
-
-    fila.append(
-      crear("td", e.id),
-      crear("td", e.ubicacion || "—"),
-      celdaEstado,
-      crear("td", sinDatos ? "—" : formatear(regando ? e.caudal : 0), "numero"),
-      crear("td", sinDatos ? "—" : formatear(regando ? e.volumen : 0), "numero"),
-      crear("td", regando && e.operario ? e.operario : "—")
-    );
-
-    // Seleccionar con clic o con teclado
-    fila.addEventListener("click", () => seleccionar(e.id));
-    fila.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter" || ev.key === " ") {
-        ev.preventDefault();
-        seleccionar(e.id);
-      }
-    });
-    cuerpo.append(fila);
-  }
 }
 
 // Peticiones de activación (pág. 4): primero las activas, después las terminadas
 function pintarPeticiones() {
-  const cuerpo = $("peticiones");
-  cuerpo.replaceChildren();
-  $("peticiones-vacia").hidden = peticiones.length > 0;
+    const cuerpo = $("peticiones");
+    cuerpo.replaceChildren();
+    $("peticiones-vacia").hidden = peticiones.length > 0;
 
-  const activas    = peticiones.filter(p => !FASES_FINALES.includes(p.fase)).reverse();
-  const terminadas = peticiones.filter(p =>  FASES_FINALES.includes(p.fase)).reverse();
+    const activas = peticiones.filter(p => !FASES_FINALES.includes(p.fase)).reverse();
+    const terminadas = peticiones.filter(p => FASES_FINALES.includes(p.fase)).reverse();
 
-  for (const p of [...activas, ...terminadas]) {
-    const fila = document.createElement("tr");
-    if (FASES_FINALES.includes(p.fase)) fila.classList.add("terminada");
+    for (const p of [...activas, ...terminadas]) {
+        const fila = document.createElement("tr");
+        if (FASES_FINALES.includes(p.fase)) fila.classList.add("terminada");
 
-    const celdaFase = document.createElement("td");
-    celdaFase.append(etiquetaFase(p.fase));
+        const celdaFase = document.createElement("td");
+        celdaFase.append(etiquetaFase(p.fase));
 
-    fila.append(
-      crear("td", p.hora || "—"),
-      crear("td", p.operario || "—"),
-      crear("td", p.ws || "—"),
-      crear("td", p.duracion ? String(p.duracion) : "—", "numero"),
-      celdaFase,
-      crear("td", p.resultado || "—", "texto-suave")
-    );
-    cuerpo.append(fila);
-  }
+        fila.append(
+            crear("td", p.hora || "—"),
+            crear("td", p.operario || "—"),
+            crear("td", p.ws || "—"),
+            crear("td", p.duracion ? String(p.duracion) : "—", "numero"),
+            celdaFase,
+            crear("td", p.resultado || "—", "texto-suave")
+        );
+        cuerpo.append(fila);
+    }
 }
 
 // Estado del sistema central (pág. 4)
 function pintarCentral() {
-  const dl = $("central");
-  dl.replaceChildren();
+    const dl = $("central");
+    dl.replaceChildren();
 
-  const conectadas  = estaciones.filter(e => e.estado !== "DESCONECTADA").length;
-  const regando     = estaciones.filter(e => e.estado === "REGANDO").length;
-  const enFuga      = estaciones.filter(e => e.estado === "FUGA").length;
-  const activas     = peticiones.filter(p => !FASES_FINALES.includes(p.fase)).length;
+    const conectadas = estaciones.filter(e => e.estado !== "DESCONECTADA").length;
+    const regando = estaciones.filter(e => e.estado === "REGANDO").length;
+    const enFuga = estaciones.filter(e => e.estado === "FUGA").length;
+    const activas = peticiones.filter(p => !FASES_FINALES.includes(p.fase)).length;
 
-  if (!conectado) {
-    filaDatos(dl, "CENTRAL", "Sin respuesta", "error");
-  } else {
-    filaDatos(dl, "CENTRAL", "En funcionamiento", "ok");
-  }
+    if (!conectado) {
+        filaDatos(dl, "CENTRAL", "Sin respuesta", "error");
+    } else {
+        filaDatos(dl, "CENTRAL", "En funcionamiento", "ok");
+    }
 
-  if (central.kafka === true) {
-    filaDatos(dl, "Gestor de colas (Kafka)", "Conectado", "ok");
-  } else if (central.kafka === false) {
-    filaDatos(dl, "Gestor de colas (Kafka)", "Sin conexión", "error");
-  } else {
-    filaDatos(dl, "Gestor de colas (Kafka)", "—");
-  }
+    if (central.kafka === true) {
+        filaDatos(dl, "Gestor de colas (Kafka)", "Conectado", "ok");
+    } else if (central.kafka === false) {
+        filaDatos(dl, "Gestor de colas (Kafka)", "Sin conexión", "error");
+    } else {
+        filaDatos(dl, "Gestor de colas (Kafka)", "—");
+    }
 
-  filaDatos(dl, "En marcha desde", central.arranque || "—");
-  filaDatos(dl, "Estaciones registradas", String(estaciones.length));
-  filaDatos(dl, "Monitores conectados", conectadas + " de " + estaciones.length,
-            conectadas < estaciones.length ? "alerta" : "ok");
-  filaDatos(dl, "Riegos en curso", String(regando));
-  filaDatos(dl, "Estaciones con fuga", String(enFuga), enFuga > 0 ? "error" : undefined);
-  filaDatos(dl, "Peticiones activas", String(activas));
-  filaDatos(dl, "Última actualización", ultimaActualizacion || "—");
+    filaDatos(dl, "En marcha desde", central.arranque || "—");
+    filaDatos(dl, "Estaciones registradas", String(estaciones.length));
+    filaDatos(dl, "Monitores conectados", conectadas + " de " + estaciones.length,
+        conectadas < estaciones.length ? "alerta" : "ok");
+    filaDatos(dl, "Riegos en curso", String(regando));
+    filaDatos(dl, "Estaciones con fuga", String(enFuga), enFuga > 0 ? "error" : undefined);
+    filaDatos(dl, "Peticiones activas", String(activas));
+    filaDatos(dl, "Última actualización", ultimaActualizacion || "—");
 }
 
 function seleccionar(id) {
-  seleccion = id;
-  document.querySelector('input[name="destino"][value="una"]').checked = true;
-  mostrarRespuesta("");
-  pintar();
+    seleccion = id;
+    document.querySelector('input[name="destino"][value="una"]').checked = true;
+    mostrarRespuesta("");
+
+    // Rellena el formulario de gestión con la estación elegida (para cambiar su ubicación o borrarla)
+    const e = estaciones.find(x => x.id === id);
+    if (e) {
+        $("g-id").value = e.id;
+        $("g-ubicacion").value = e.ubicacion || "";
+    }
+    pintar();
+}
+
+// ---------------- Gestión de estaciones ----------------
+// Envía ANADIR, UBICACION o BORRAR a CENTRAL y muestra su respuesta
+async function gestionarEstacion(accion) {
+    const id = $("g-id").value.trim();
+    const ubicacion = $("g-ubicacion").value.trim();
+    const respuesta = $("respuesta-gestion");
+
+    if (!id) {
+        respuesta.textContent = "Escribe el ID de la estación.";
+        $("g-id").focus();
+        return;
+    }
+    if (accion !== "BORRAR" && !ubicacion) {
+        respuesta.textContent = "Escribe la ubicación.";
+        $("g-ubicacion").focus();
+        return;
+    }
+
+    try {
+        const r = await fetch("/api/estacion", { method: "POST", body: new URLSearchParams({ accion, id, ubicacion }) });
+        const datos = await r.json().catch(() => ({}));
+        respuesta.textContent = datos.mensaje || (r.ok ? "Hecho." : "CENTRAL ha rechazado la operación (HTTP " + r.status + ").");
+        if (r.ok && accion === "BORRAR") {
+            if (seleccion === id) seleccion = null;
+            $("g-id").value = "";
+            $("g-ubicacion").value = "";
+        }
+    } catch (err) {
+        respuesta.textContent = "No se ha podido enviar: CENTRAL no responde.";
+    }
+    actualizar();
 }
 
 // Detalle de la estación seleccionada, con sus componentes (pág. 5; Figuras 1 y 2, pág. 6)
 function pintarDetalle() {
-  const caja = $("detalle");
-  caja.replaceChildren();
+    const caja = $("detalle");
+    caja.replaceChildren();
 
-  const e = estaciones.find(x => x.id === seleccion);
-  if (!e) {
-    caja.append(crear("p", "Selecciona una estación en la tabla para ver su detalle y enviarle órdenes.", "vacio"));
-    return;
-  }
+    const e = estaciones.find(x => x.id === seleccion);
+    if (!e) {
+        caja.append(crear("p", "Selecciona una estación en la tabla para ver su detalle y enviarle órdenes.", "vacio"));
+        return;
+    }
 
-  const regando  = e.estado === "REGANDO";
-  const sinDatos = e.estado === "DESCONECTADA";
-  const fuga     = e.estado === "FUGA";
+    const regando = e.estado === "REGANDO";
+    const sinDatos = e.estado === "DESCONECTADA";
+    const fuga = e.estado === "FUGA";
 
-  caja.append(
-    crear("p", e.id, "titulo-ws"),
-    crear("p", e.ubicacion || "Ubicación desconocida", "ubicacion")
-  );
+    caja.append(
+        crear("p", e.id, "titulo-ws"),
+        crear("p", e.ubicacion || "Ubicación desconocida", "ubicacion")
+    );
 
-  // Datos del riego
-  const dl = document.createElement("dl");
-  const dd = document.createElement("dd");
-  dd.append(etiquetaEstado(e.estado));
-  dl.append(crear("dt", "Estado"), dd);
-  filaDatos(dl, "Caudal",            sinDatos ? "—" : formatear(regando ? e.caudal : 0) + " L/min");
-  filaDatos(dl, "Volumen acumulado", sinDatos ? "—" : formatear(regando ? e.volumen : 0) + " L");
-  filaDatos(dl, "Operario",          regando && e.operario ? e.operario : "—");
-  filaDatos(dl, "Último riego",      e.ultimoRiego || "—");
-  caja.append(dl);
+    // Datos del riego
+    const dl = document.createElement("dl");
+    const dd = document.createElement("dd");
+    dd.append(etiquetaEstado(e.estado));
+    dl.append(crear("dt", "Estado"), dd);
+    filaDatos(dl, "Caudal", sinDatos ? "—" : formatear(regando ? e.caudal : 0) + " L/min");
+    filaDatos(dl, "Volumen acumulado", sinDatos ? "—" : formatear(regando ? e.volumen : 0) + " L");
+    filaDatos(dl, "Operario", regando && e.operario ? e.operario : "—");
+    filaDatos(dl, "Último riego", e.ultimoRiego || "—");
+    caja.append(dl);
 
-  // Componentes de la estación (pág. 5): caudalímetro, detector de fuga y electroválvula.
-  // Se deducen del estado de la WS                                              [diseño]
-  caja.append(crear("p", "Componentes", "subtitulo"));
-  const comp = document.createElement("dl");
+    // Componentes de la estación (pág. 5): caudalímetro, detector de fuga y electroválvula.
+    // Se deducen del estado de la WS                                              [diseño]
+    caja.append(crear("p", "Componentes", "subtitulo"));
+    const comp = document.createElement("dl");
 
-  if (sinDatos) {
-    filaDatos(comp, "Caudalímetro",      "Sin datos");
-    filaDatos(comp, "Detector de fuga",  "Sin datos");
-    filaDatos(comp, "Electroválvula",    "Sin datos");
-  } else {
-    filaDatos(comp, "Caudalímetro",      regando ? "Midiendo" : "En espera", "ok");
-    filaDatos(comp, "Detector de fuga",  fuga ? "Fuga detectada" : "Sin incidencias", fuga ? "error" : "ok");
-    filaDatos(comp, "Electroválvula",    regando ? "Abierta" : "Cerrada", regando ? "ok" : undefined);
-  }
-  caja.append(comp);
+    if (sinDatos) {
+        filaDatos(comp, "Caudalímetro", "Sin datos");
+        filaDatos(comp, "Detector de fuga", "Sin datos");
+        filaDatos(comp, "Electroválvula", "Sin datos");
+    } else {
+        filaDatos(comp, "Caudalímetro", regando ? "Midiendo" : "En espera", "ok");
+        filaDatos(comp, "Detector de fuga", fuga ? "Fuga detectada" : "Sin incidencias", fuga ? "error" : "ok");
+        filaDatos(comp, "Electroválvula", regando ? "Abierta" : "Cerrada", regando ? "ok" : undefined);
+    }
+    caja.append(comp);
 }
 
 // Desactiva las órdenes que no tienen sentido. Con "Todas" decide CENTRAL estación por estación
 function pintarBotones() {
-  const destino = document.querySelector('input[name="destino"]:checked').value;
-  const e = estaciones.find(x => x.id === seleccion);
-  const iniciar  = document.querySelector('[data-accion="INICIAR"]');
-  const bloquear = document.querySelector('[data-accion="BLOQUEAR"]');
-  const activar  = document.querySelector('[data-accion="ACTIVAR"]');
+    const destino = document.querySelector('input[name="destino"]:checked').value;
+    const e = estaciones.find(x => x.id === seleccion);
+    const iniciar = document.querySelector('[data-accion="INICIAR"]');
+    const bloquear = document.querySelector('[data-accion="BLOQUEAR"]');
+    const activar = document.querySelector('[data-accion="ACTIVAR"]');
 
-  if (!conectado) {
-    iniciar.disabled = bloquear.disabled = activar.disabled = true;
-    return;
-  }
-  if (destino === "todas") {
-    iniciar.disabled = bloquear.disabled = activar.disabled = estaciones.length === 0;
-    return;
-  }
-  if (!e) {
-    iniciar.disabled = bloquear.disabled = activar.disabled = true;
-    return;
-  }
-  iniciar.disabled  = e.estado !== "DISPONIBLE";                                   // punto 4, pág. 7
-  bloquear.disabled = e.estado === "FUERA_SERVICIO" || e.estado === "DESCONECTADA";
-  activar.disabled  = e.estado !== "FUERA_SERVICIO";
+    if (!conectado) {
+        iniciar.disabled = bloquear.disabled = activar.disabled = true;
+        return;
+    }
+    if (destino === "todas") {
+        iniciar.disabled = bloquear.disabled = activar.disabled = estaciones.length === 0;
+        return;
+    }
+    if (!e) {
+        iniciar.disabled = bloquear.disabled = activar.disabled = true;
+        return;
+    }
+    iniciar.disabled = e.estado !== "DISPONIBLE";                                   // punto 4, pág. 7
+    bloquear.disabled = e.estado === "FUERA_DE_SERVICIO" || e.estado === "DESCONECTADA";
+    activar.disabled = e.estado !== "FUERA_DE_SERVICIO";
 }
 
 // Mensajes de la aplicación
 function pintarEventos() {
-  const lista = $("eventos");
-  lista.replaceChildren();
-  if (eventos.length === 0) {
-    lista.append(crear("li", "Todavía no hay mensajes."));
-    return;
-  }
-  for (const ev of eventos) {
-    const li = document.createElement("li");
-    li.append(crear("time", ev.hora), document.createTextNode(ev.texto));
-    lista.append(li);
-  }
+    const lista = $("eventos");
+    lista.replaceChildren();
+    if (eventos.length === 0) {
+        lista.append(crear("li", "Todavía no hay mensajes."));
+        return;
+    }
+    for (const ev of eventos) {
+        const li = document.createElement("li");
+        li.append(crear("time", ev.hora), document.createTextNode(ev.texto));
+        lista.append(li);
+    }
 }
 
 // ---------------- Arranque ----------------
 document.querySelectorAll("[data-accion]").forEach(b =>
-  b.addEventListener("click", () => enviarOrden(b.dataset.accion))
+    b.addEventListener("click", () => enviarOrden(b.dataset.accion))
 );
 document.querySelectorAll('input[name="destino"]').forEach(r =>
-  r.addEventListener("change", pintarBotones)
+    r.addEventListener("change", pintarBotones)
+);
+document.querySelectorAll("[data-gestion]").forEach(b =>
+    b.addEventListener("click", () => gestionarEstacion(b.dataset.gestion))
 );
 
 actualizar();

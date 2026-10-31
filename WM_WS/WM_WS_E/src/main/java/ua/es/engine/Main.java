@@ -7,6 +7,8 @@ import java.util.Scanner;
 import java.util.List;
 import java.util.UUID;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -58,6 +60,52 @@ public class Main {
     private static final String TOPIC_ORDENES = "topicOrdenes";       // CENTRAL → Engine
     private static final String TOPIC_EVENTOS = "topicEventos";       // Engine → CENTRAL
     private static final String TOPIC_TELEMETRIA = "topicTelemetria"; // Engine → CENTRAL
+
+    // Carpeta donde se guarda el riego en curso, para no perderlo si el Engine se cae
+    // (en Docker se monta un volumen ahí)
+    private static final String DIR_DATOS = System.getenv().getOrDefault("WM_DATOS_DIR", ".");
+
+    // Archivo del riego en curso de esta estación
+    private static Path archivoRiego() {
+        return Path.of(DIR_DATOS, "riego_" + idWS + ".txt");
+    }
+
+    // Guarda el riego en curso: operario#volumen#inicio#ahora. Se llama dentro de synchronized(obj)
+    private static void guardarRiego() {
+        try {
+            Files.writeString(archivoRiego(), idOperario + "#" + volumen + "#" + inicioRiego + "#" + System.currentTimeMillis());
+        } catch(IOException e) {
+            System.out.println("Aviso: no se puede guardar el riego en " + archivoRiego());
+        }
+    }
+
+    // Borra el riego guardado al terminar. Se llama dentro de synchronized(obj)
+    private static void borrarRiego() {
+        try {
+            Files.deleteIfExists(archivoRiego());
+        } catch(IOException e) {
+            System.out.println("Aviso: no se puede borrar " + archivoRiego());
+        }
+    }
+
+    // Al arrancar: si quedó un riego a medias (el Engine se cayó), se envía su resumen con lo regado
+    private static void recuperarRiego() {
+        Path archivo = archivoRiego();
+        if(!Files.exists(archivo)) {
+            return;
+        }
+        try {
+            String[] c = Files.readString(archivo).trim().split("#");
+            String operario = c[0];
+            double vol = Double.parseDouble(c[1]);
+            long duracion = (Long.parseLong(c[3]) - Long.parseLong(c[2])) / 1000;
+            System.out.println("Riego interrumpido por una caída: " + vol + " L en " + duracion + " s. Se envía el resumen a CENTRAL");
+            enviar(TOPIC_EVENTOS, "FIN_RIEGO#" + idWS + "#" + operario + "#" + vol + "#" + duracion + "#AVERIA");
+            Files.delete(archivo);
+        } catch(IOException | RuntimeException e) {
+            System.out.println("Aviso: no se puede recuperar el riego guardado en " + archivo);
+        }
+    }
 
     private static void hiloMonitor(String ipMonitor, int puertoMonitor) {
         // Si se pierde el monitor, se reintenta
@@ -193,6 +241,11 @@ public class Main {
                         }
                     }
                 } else if(entradaUsr.toLowerCase().equals("r")) {
+                    // Sin Monitor la estación no está supervisada: no admite riegos
+                    if(estado.equals(ESTADO.DESCONECTADA)) {
+                        System.out.println("WS AVERIADA: sin conexión con el Monitor. No se admiten riegos");
+                        continue;
+                    }
                     System.out.println("Introduzca la duración(s): ");
 
                     int duracion;
@@ -363,8 +416,9 @@ public class Main {
             }
 
             System.out.println("Resumen: " + volumenFinal + " L en " + duracionReal + " s");
-            
+
             inicioRiego = 0;
+            borrarRiego(); // terminado: ya no hay nada que recuperar
 
             if(!estado.equals(ESTADO.DESCONECTADA)) {
                 estado = estadoReposo();
@@ -386,6 +440,7 @@ public class Main {
         inicioRiego = System.currentTimeMillis();
         numRiego++;
         int r = numRiego;
+        guardarRiego();
 
         System.out.println("Abriendo electroválvula. Riego iniciado por " + idOperario);
 
@@ -415,6 +470,7 @@ public class Main {
                 }
 
                 volumen += caudal / 60; // L/min
+                guardarRiego(); // dentro del lock: así no se puede guardar un riego que ya terminó
 
                 volumenActual = volumen;
                 operario = idOperario;
@@ -482,6 +538,9 @@ public class Main {
         }    
 
         System.out.println("Engine asignado a WS " + idWS);
+
+        // Si el Engine se cayó en mitad de un riego, se envía ahora lo que se regó
+        recuperarRiego();
 
         // Se lanza el hilo de kafka
         new Thread(() -> hiloKafka(ipBroker, puertoBroker)).start();

@@ -7,6 +7,8 @@ import ua.es.central.basedatos.OperarioBD;
 import ua.es.central.modelo.Estacion;
 import ua.es.central.logica.Comandos;
 import ua.es.central.logica.Riegos;
+import ua.es.central.web.EstadoPanel;
+import ua.es.central.web.PanelWeb;
 
 
 import java.util.concurrent.Executors;
@@ -77,6 +79,8 @@ public class Main {
         RegistroEstaciones registro;
         EstacionBD estaciones;
         OperarioBD operarios;
+        EstadoPanel panel = new EstadoPanel();
+        
         // Se abre la base de datos; si falla, Central no puede continuar.
         try {
             Database baseDatos = new Database();
@@ -87,6 +91,17 @@ public class Main {
 
             registro = new RegistroEstaciones(estaciones);
             registro.cargar(estaciones.listar());
+            for(Estacion e : estaciones.listar()) {
+                panel.cargar(e.id(), e.ubicacion());
+            }
+            // El panel se entera de cada cambio de estado de una estacion
+            registro.alCambiar((id, estado) -> {
+                panel.cambiarEstado(id, estado.name());
+                panel.anotar(id + " -> " + estado);
+            });
+
+
+
             System.out.println("Estaciones registradas: " + estaciones.listar().size());
         } catch (SQLException e) {
             System.out.println("Error con la base de datos: " + e.getMessage());
@@ -102,12 +117,26 @@ public class Main {
          * Kafka: un productor compartido, un hilo consumidor y la foto periodica de estados 
          */
         Productor productor = new Productor(broker);
+        productor.alCambiarConexion(panel::kafka);
         Runtime.getRuntime().addShutdownHook(new Thread(productor::close));
-        Riegos riegos = new Riegos(registro, operarios, productor);
+        
+        Riegos riegos = new Riegos(registro, operarios, productor, panel);
+        registro.alCambiar(riegos::cambioEstado); // avisar al FO si su estacion se averia durante el riego
         new Thread(new Consumidor(broker, riegos)).start();
         Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(
             () -> publicarEstados(productor, estaciones, registro), 0, PERIODO_ESTADOS_S, TimeUnit.SECONDS);
-        new Thread(new Comandos(registro, riegos, productor)).start();
+        Comandos comandos = new Comandos(registro, riegos, productor, panel);
+        new Thread(comandos).start();
+
+        // Panel web: Railway indica el puerto en la variable PORT; en local se usa el 8080
+        String puertoTexto = System.getenv("PORT");
+        int webPort = (puertoTexto == null || puertoTexto.isBlank()) ? 8080 : leerPuerto(puertoTexto);
+        try {
+            new PanelWeb(webPort, panel, comandos).arrancar();
+        } catch(IOException e) {
+            System.out.println("Error: no se puede abrir el panel web en el puerto " + webPort + ": " + e.getMessage());
+        }
+
 
         System.out.println("WM_Central arrancado");
         System.out.println("Puerto de sockets :" + socketPort);

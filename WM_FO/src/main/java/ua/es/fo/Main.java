@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
-import java.util.UUID;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -49,16 +48,23 @@ public class Main {
 
     private static volatile boolean archivoEnProceso = false; // Para no lanzar dos archivos a la vez
 
+    // Central publica el estado de las estaciones cada 2 s. Si deja de llegar, Central ha caído.
+    private static final int SIN_CENTRAL_MS = 6000;
+    private static volatile long ultimoEstado = System.currentTimeMillis(); // ms del último ESTADO recibido
+
     // Recibe mensajes mientras el operario usa el menú
     private static void hiloConsumidor(String ipBroker, int puertoBroker) {
         // Consumidor local
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, ipBroker + ":" + puertoBroker);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, "fo-" + idOperario + "-" + UUID.randomUUID()); // grupo nuevo en cada arranque
+        // Grupo fijo por operario: si el FO se cae, al volver recibe lo que le llegó mientras estaba fuera
+        // (por ejemplo, el resumen de su riego). Miembro estático: al reiniciarse ocupa su sitio al momento.
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "fo-" + idOperario);
+        props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "fo-" + idOperario);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest"); // solo la primera vez que se usa este ID
 
         try(KafkaConsumer<String, String> consumidor = new KafkaConsumer<>(props)) {
             // Se suscribe a los topics
@@ -99,6 +105,7 @@ public class Main {
         String idWS = campos[1];
         String ubi = campos[2];
         String nuevo = campos[3];
+        ultimoEstado = System.currentTimeMillis(); // Central sigue viva
 
         synchronized(obj) {
             estaciones.put(idWS, new String[]{ubi, nuevo});
@@ -117,7 +124,14 @@ public class Main {
 
         synchronized(obj) {
             if(!solicitudEnCurso || concluida || !idWS.equals(wsSolicitud)) {
-                System.out.println("Mensaje de otra estación ignorado: " + valor);
+                // No es la solicitud en curso: puede ser un riego anterior (por ejemplo, el FO se cayó
+                // y al volver recibe lo que se perdió). El resultado y las averías se muestran igual.
+                if(tipo.equals("FIN_RIEGO")) {
+                    System.out.println("===== Resultado de un riego anterior en " + idWS + " =====");
+                    System.out.println("Volumen total: " + campos[2] + " L, duración: " + campos[3] + " s, motivo: " + campos[4]);
+                } else if(tipo.equals("AVERIA")) {
+                    System.out.println("*** Avería en " + idWS + " durante un riego anterior (" + campos[2] + ") ***");
+                }
                 return;
             }
 
@@ -149,6 +163,12 @@ public class Main {
 
                 concluida = true;
                 resultado = "EXITO";
+                obj.notifyAll();
+            } else if(tipo.equals("AVERIA")) {
+                System.out.println("*** AVERÍA en " + idWS + " (" + campos[2] + "): el riego se ha interrumpido ***");
+                System.out.println("El resumen llegará cuando la estación se recupere");
+                concluida = true;
+                resultado = "FRACASO";
                 obj.notifyAll();
             } else {
                 System.out.println("Mensaje desconocido: " + valor);
@@ -375,6 +395,25 @@ public class Main {
         }
     }
 
+    // Avisa si Central deja de dar señales de vida (no llegan estados) y cuando vuelve
+    private static void hiloVigilante() {
+        boolean centralViva = true;
+        for(;;) {
+            try {
+                Thread.sleep(2000);
+            } catch(InterruptedException e) {
+                return;
+            }
+            boolean ahora = System.currentTimeMillis() - ultimoEstado < SIN_CENTRAL_MS;
+            if(centralViva && !ahora) {
+                System.out.println("*** Imposible conectar con WM_Central: no llegan noticias suyas. No se pueden pedir riegos ***");
+            } else if(!centralViva && ahora) {
+                System.out.println("*** Conexión con WM_Central restablecida ***");
+            }
+            centralViva = ahora;
+        }
+    }
+
     // Menú del operario (hilo principal)
     private static void menu() {
         Scanner sc = new Scanner(System.in); // una sola vez, sin cerrar (cerraría System.in)
@@ -451,6 +490,9 @@ public class Main {
 
         // Se lanza el hilo que recibe todo lo que llega de CENTRAL
         new Thread(() -> hiloConsumidor(ipBroker, puertoBroker)).start();
+
+        // Se lanza el hilo que avisa si Central cae
+        new Thread(Main::hiloVigilante).start();
 
         // Se espera un momento para que lleguen los primeros estados
         try {

@@ -18,6 +18,9 @@ public class DatosIniciales {
 
 
 	public static void cargar(EstacionBD estaciones, OperarioBD operarios) throws IOException, SQLException {
+		// Las estaciones del CSV solo se cargan la primera vez (BD sin estaciones). Despues se gestionan
+		// desde el panel, y asi una estacion borrada no vuelve a aparecer al reiniciar Central.
+		boolean cargarEstaciones = estaciones.listar().isEmpty();
 		try(BufferedReader lector = abrir()){
 			String linea;
 			int numLinea = 0;
@@ -37,7 +40,9 @@ public class DatosIniciales {
 				String id = campos[1].trim();
 				String dato = campos[2].trim();
 				if(tipo.equals("ESTACION")){
-					estaciones.insertar(new Estacion(id, dato,Estado.DESCONECTADA));
+					if(cargarEstaciones){
+						estaciones.insertar(new Estacion(id, dato,Estado.DESCONECTADA));
+					}
 				}
 				else if (tipo.equals("OPERARIO")){
 					operarios.insertar(id, dato);
