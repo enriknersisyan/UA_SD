@@ -1,0 +1,6 @@
+# Peticiones de riego para WM_FO (opcion 3 del menu)
+# Formato: idWS#duracion en segundos. Las lineas con # al principio se ignoran.
+# Usa los IDs de las estaciones que tengas en marcha (Monitor + Engine).
+WS-01#5
+WS-01#5
+WS-03#5
