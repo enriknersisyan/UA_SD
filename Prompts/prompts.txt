@@ -11,9 +11,7 @@ ENRIK NERSISIAN
 Herramienta: Claude Code y Copilot(configurado en Visual Studio 2022).
 Resumen de los prompts utilizados, agrupados por tema: cada bloque reune en un
 solo texto varias peticiones que hice durante el desarrollo.
-La IA no modificaba el repositorio: daba el codigo como texto, y yo lo copiaba,
-lo compilaba, lo probaba y hacia los commits.
-
+La IA no modificaba el repositorio daba recomendaciones de codigo.
 
 1. Contexto y forma de trabajo
 ------------------------------
