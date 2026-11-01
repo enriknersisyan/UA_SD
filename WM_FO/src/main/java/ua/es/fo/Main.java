@@ -38,7 +38,7 @@ public class Main {
 
     // Datos compartidos entre hilos
     private static final Object obj = new Object();
-    private static final Map<String, String[]> estaciones = new HashMap<>(); // idWS → {ubicacion, estado}
+    private static final Map<String, String[]> estaciones = new HashMap<>(); // idWS → {ubicacion, estado, ms de la última noticia}
     private static boolean solicitudEnCurso = false;
     private static String wsSolicitud = null;
     private static boolean concluida = false;
@@ -108,8 +108,7 @@ public class Main {
         ultimoEstado = System.currentTimeMillis(); // Central sigue viva
 
         synchronized(obj) {
-            estaciones.put(idWS, new String[]{ubi, nuevo});
-
+            estaciones.put(idWS, new String[]{ubi, nuevo, String.valueOf(ultimoEstado)});
             // Solo avisa si la WS de la solicitud entra en fuga
             if(solicitudEnCurso && !concluida && idWS.equals(wsSolicitud) && nuevo.equals("FUGA")) {
                 System.out.println("*** ATENCIÓN: Fuga detectada en " + idWS + " ***");
@@ -201,8 +200,13 @@ public class Main {
             copia = new TreeMap<>(estaciones); // TreeMap: ordenada por idWS
         }
 
+        // Central publica cada 2 s el estado de las estaciones que existen. Si de una no llega
+        // nada en 6 s, se ha borrado (o Central ha caído): no se muestra.
+        long ahora = System.currentTimeMillis();
+        copia.values().removeIf(info -> ahora - Long.parseLong(info[2]) > SIN_CENTRAL_MS);
+
         if(copia.isEmpty()) {
-            System.out.println("Todavía no se ha recibido el estado de ninguna estación");
+            System.out.println("No llegan estados de CENTRAL: no hay estaciones que mostrar");
             return;
         }
 
