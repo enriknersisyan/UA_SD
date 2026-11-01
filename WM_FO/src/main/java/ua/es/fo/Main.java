@@ -223,8 +223,19 @@ public class Main {
         }
     }
 
+    // Central publica los estados cada 2 s: si no llega ninguno en 6 s, se da por caída
+    private static boolean centralCaida() {
+        return System.currentTimeMillis() - ultimoEstado >= SIN_CENTRAL_MS;
+    }
+
         // Solicita un riego de forma puntual en una WS (Field Operators, pág. 11)
     private static void solicitudManual(Scanner sc) {
+        // Con Central caída no se admiten peticiones nuevas (guía de corrección)
+        if(centralCaida()) {
+            System.out.println("*** Imposible conectar con WM_Central: no se pueden pedir riegos ahora ***");
+            return;
+        }
+
         // Solo la comprobación va con el lock; leer del teclado NUNCA con el lock cogido
         synchronized(obj) {
             if(solicitudEnCurso && !concluida) {
@@ -327,6 +338,13 @@ public class Main {
             }
             if(idWS.isEmpty() || duracion <= 0) {
                 System.out.println("Línea " + (i + 1) + " mal formada, se omite");
+                continue;
+            }
+
+            // Con Central caída no se envía: la línea cuenta como sin respuesta
+            if(centralCaida()) {
+                System.out.println("Línea " + (i + 1) + ": imposible conectar con WM_Central, no se envía");
+                sinRespuesta++;
                 continue;
             }
 
