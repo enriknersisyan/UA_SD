@@ -1,3 +1,121 @@
+PROMPTS UTILIZADOS CON IA - Practica WaterManagement (Sistemas Distribuidos 2026/2027)
+=====================================================================================
+
 - Ayudame a generar los pom.xml de cada carpeta.
 - Ayudame a crear el productor y consumidor en WM_WS_E
 - Ayudame a generar el css y el js para la interfaz
+
+
+ENRIK NERSISIAN
+---------------
+Herramienta: Claude Code y Copilot(configurado en Visual Studio 2022).
+Resumen de los prompts utilizados, agrupados por tema: cada bloque reune en un
+solo texto varias peticiones que hice durante el desarrollo.
+La IA no modificaba el repositorio daba recomendaciones de codigo.
+
+1. Contexto y forma de trabajo
+------------------------------
+Actua como un ingeniero de software senior con experiencia en Java y sistemas
+distribuidos. Te adjunto el enunciado de la practica WaterManagement. Soy
+estudiante y tengo que crear y defender la practica, asi que quiero
+codigo claro, comentado con la explicacion teorica aparte del funcionamiento y de esqueletos comunes.
+Guiate sobre el enunciado, no inventes clases ni configuraciones y evita la complejidad innecesaria. No supongas nada:
+en cada decision de diseño dame 2 o 3 opciones con tu recomendacion y la explicacion de inconvenientes y ventajas de cada opcion y dejame
+elegir. En cada paso indica en que equipo se hace (Central, PC
+del Monitor o PC del FO).
+
+2. Base de datos de Central (SQLite)
+------------------------------------
+Ayudame a montar la base de datos de Central con SQLite y JDBC puro: una clase
+que abra la conexion y cree las tablas de operarios y estaciones, y otras con
+las consultas de cada tabla (insertar, listar, existe, borrar, cambiar
+ubicacion). Explicame el esqueleto tipico de una clase de acceso a datos y por
+que se sincroniza la conexion. Quiero cargar unos datos iniciales desde un CSV:
+¿por que tiene que ir en src/main/resources y no junto a la base de datos? Al
+arrancar, las estaciones deben aparecer como DESCONECTADA.
+
+
+3. Servidor de sockets y registro de estaciones
+-----------------------------------------------
+Quiero unir por sockets el Monitor de mi compañero con Central. Revisa mi
+registro de estaciones, el servidor de sockets y el Main: ¿que hacen, como los
+pruebo con los jar y que no cumple la practica? Si se registra un Monitor con un
+ID que ya esta conectado, ¿como lo rechazo? ¿Conviene una conexion corta por
+mensaje o una persistente? Si es persistente, ¿como detecto que un Monitor se ha
+caido con tiempo de espera o con frecuencia(latidos)? Quiero atender cada conexion en su propio
+hilo; explicame los hilos virtuales y el uso de synchronized.
+
+
+4. Protocolo de sockets y modulo compartido
+-------------------------------------------
+Explicame el protocolo del enunciado <STX><DATA><ETX><LRC> con ENQ, ACK, NACK
+y EOT, y ayudame a hacer un modulo compartido que usen Central, Monitor y
+Engine: una clase que empaquete la trama y calcule el LRC, y otra que abra el
+canal, envie esperando el ACK con reenvios y reciba comprobando el LRC. Dame lo
+que tengo que poner en el pom.xml del compartido y que cambio en Central para que use canal.
+Explicame para que serian necesarios los tests de Trama y Canal: que comprueba cada metodo y como lo hace.
+
+
+5. Kafka en Central
+-------------------
+Explicame los patrones de Kafka (productor, consumidor, topics, grupos de
+consumidores y offsets) y dime que decisiones tengo que tomar para el diseño. Te
+adjunto los ejemplos de clase. Dame la base de Kafka en Central: un unico
+productor para todo Central y un consumidor en su propio hilo, con los topics de
+peticiones, respuestas, estados, ordenes, eventos y telemetria, y un
+docker-compose para probarlo en local. Si Central se reinicia, ¿como evito
+perder los mensajes que llegaron mientras estaba caida?
+
+
+6. Logica de riego, estados y comandos
+--------------------------------------
+Ayudame con la logica de riego en Central: el FO solicita un riego, Central
+comprueba que el operario y la estacion existen, pide autorizacion al Engine,
+reserva la estacion para que nadie mas la use y ordena iniciar. 
+Durante el riego, la telemetria actualiza el caudal y el volumen, al terminar se informa al
+FO. Si hay una fuga o la estacion se desconecta en mitad de un riego, se avisa al
+FO. Añade los comandos de Central (iniciar riego, bloquear y activar una o todas
+las estaciones) en un menu de consola, y revisa donde me falta capturar
+excepciones.
+
+
+7. Panel web de Central
+-----------------------
+Revisa el panel web (Main, html, css y js): ¿es mejor mantener mi parte y
+adaptar el panel? El panel debe mostrar en tiempo real las estaciones con sus
+colores de estado, las peticiones de los operarios, el estado de Central y de
+Kafka y el ultimo riego, y permitir enviar ordenes. Añade la gestion de
+estaciones: dar de alta, cambiar la ubicacion y borrar (solo si esta
+desconectada), con validacion de los datos.
+
+
+8. Docker
+---------
+¿Necesito un Dockerfile por modulo o por clase? Dame los Dockerfile de Central,
+FO, Monitor y Engine (compilacion en dos etapas con Maven), el .dockerignore
+(¿es un archivo nuevo o va en el .gitignore?) y el docker-compose entero.
+Explicame como construir las imagenes, como pasarlas a otro PC y como usar
+volumenes para que los datos no se pierdan si se cae un contenedor.
+
+
+9. Despliegue en Railway y Pruebas en varios equipos
+-----------------------------------------------------
+Dame una guia explicita para desplegar Central y Kafka en Railway a partir del
+tutorial de clase: variables de entorno, red privada entre Central y Kafka,
+proxy TCP para que los PC del laboratorio se conecten, dominio para el panel web
+y volumen para la base de datos. Ayudame a leer los logs de despliegue.
+Dame el orden de arranque (Central, Monitor, Engine, FO) y un txt con los
+comandos de Docker de cada equipo. En casa me funciona pero en los PC de la
+universidad el Monitor no se conecta a Central: ¿que puede ser diferente entre
+las dos redes y como lo compruebo?
+
+
+10. Resiliencia y revision final con la guia de correccion
+----------------------------------------------------------
+Te adjunto la guia de correccion. Revisa todo el repositorio y dime que falta
+para cumplirla. El profesor puede pedir matar cualquier modulo en cualquier momento:
+¿que pasa si se cae el FO, el Engine, Central o el Monitor? Corrigelo para que
+nada se quede bloqueado; por ejemplo, que el Engine guarde el riego en curso y
+lo informe al volver. Dame los archivos cambiados enteros, una explicacion
+teorica de cada cambio y como repartirlo en commits.
+
