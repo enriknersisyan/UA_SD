@@ -1,17 +1,13 @@
 PROMPTS UTILIZADOS CON IA - Practica WaterManagement (Sistemas Distribuidos 2026/2027)
 =====================================================================================
-
-- Ayudame a generar los pom.xml de cada carpeta.
-- Ayudame a crear el productor y consumidor en WM_WS_E
-- Ayudame a generar el css y el js para la interfaz
-
-
-ENRIK NERSISIAN
----------------
 Herramienta: Claude Code y Copilot(configurado en Visual Studio 2022).
 Resumen de los prompts utilizados, agrupados por tema: cada bloque reune en un
 solo texto varias peticiones que hice durante el desarrollo.
 La IA no modificaba el repositorio daba recomendaciones de codigo.
+
+- Ayudame a generar los pom.xml de cada carpeta.
+- Ayudame a crear el productor y consumidor en WM_WS_E
+- Ayudame a generar el css y el js para la interfaz
 
 1. Contexto y forma de trabajo
 ------------------------------
