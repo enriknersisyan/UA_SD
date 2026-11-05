@@ -3,6 +3,7 @@ package ua.es.central.logica;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiConsumer;
@@ -16,6 +17,24 @@ public class RegistroEstaciones {
     
      private final EstacionBD bd;
      private final List<BiConsumer<String, Estado>> oyentes = new CopyOnWriteArrayList<>();
+     // Estaciones bloqueadas desde Central: el bloqueo se recuerda aunque el Monitor se desconecte
+     private final Set<String> bloqueadas = ConcurrentHashMap.newKeySet();
+
+     /**
+      * Apunta o quita una estacion de las bloqueadas (lo llaman bloquear y activar de Comandos)
+      */
+     public void marcarBloqueada(String id, boolean bloqueada) {
+        if(bloqueada) {
+            bloqueadas.add(id);
+        } else {
+            bloqueadas.remove(id);
+        }
+     }
+
+     // Estado de una estacion sana: FUERA_DE_SERVICIO si esta bloqueada, si no DISPONIBLE
+     private Estado estadoSana(String id) {
+        return bloqueadas.contains(id) ? Estado.FUERA_DE_SERVICIO : Estado.DISPONIBLE;
+     }
 
      /**
       * Registra a alguien que quiere enterarse de cada cambio de estado de una estacion
@@ -57,11 +76,13 @@ public class RegistroEstaciones {
             return "KO";
         }
         // si dos monitores llegan gana uno, KO si ya hay uno conectado
-        if(!estados.replace(id, Estado.DESCONECTADA, Estado.DISPONIBLE)){
+        // si estaba bloqueada, vuelve bloqueada (FUERA_DE_SERVICIO); si no, DISPONIBLE
+        Estado inicial = estadoSana(id);
+        if(!estados.replace(id, Estado.DESCONECTADA, inicial)){
             return "KO";
         }
-        
-        guardar(id, Estado.DISPONIBLE);
+
+        guardar(id, inicial);
         return "OK";
     }
 
@@ -82,8 +103,9 @@ public class RegistroEstaciones {
         switch(comando) {
             case "STATUS":  break;
             case "LEAK":       estados.put(id, Estado.FUGA); guardar(id, Estado.FUGA);      break;
-            case "LEAK_FIXED": if(estados.replace(id, Estado.FUGA, Estado.DISPONIBLE)) {
-                                    guardar(id, Estado.DISPONIBLE);}      break;
+            case "LEAK_FIXED": Estado vuelta = estadoSana(id);
+                               if(estados.replace(id, Estado.FUGA, vuelta)) {
+                                    guardar(id, vuelta);}      break;
 
             default:           return "KO";
         }
@@ -131,6 +153,7 @@ public class RegistroEstaciones {
         if(!estados.remove(id, Estado.DESCONECTADA)) {
             return false;
         }
+        bloqueadas.remove(id);
         bd.borrar(id);
         return true;
     }

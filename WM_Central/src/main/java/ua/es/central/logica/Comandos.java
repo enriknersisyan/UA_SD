@@ -113,6 +113,7 @@ public class Comandos implements Runnable {
          * Si el estado cambio justo ahora, no hace nada.
          */
         if(registro.cambiar(id, actual, Estado.FUERA_DE_SERVICIO)) {
+            registro.marcarBloqueada(id, true);   // se recuerda aunque el Monitor se desconecte
             productor.enviar(Productor.TOPIC_ORDENES, id, "BLOQUEAR");
             panel.anotar("Bloqueo enviado a " + id);
         } else {
@@ -125,6 +126,7 @@ public class Comandos implements Runnable {
      */
     public void activar(String id) {
         if(registro.cambiar(id, Estado.FUERA_DE_SERVICIO, Estado.DISPONIBLE)) {
+            registro.marcarBloqueada(id, false);
             productor.enviar(Productor.TOPIC_ORDENES, id, "ACTIVAR");
             panel.anotar("Activacion enviada a " + id);
         } else {
