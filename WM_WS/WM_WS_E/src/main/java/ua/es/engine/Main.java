@@ -511,6 +511,10 @@ public class Main {
             // Se envia fuera para no bloquear a los demás hilos
             enviar(TOPIC_TELEMETRIA, "TELEMETRIA#" + idWS + "#" + caudal + "#" + volumenActual + "#" + operario);
 
+            // Se muestra también en la pantalla del Engine, cada segundo
+            System.out.println(String.format("Regando (%s): caudal %.1f L/min, volumen %.2f L, %d de %d s",
+                operario, caudal, volumenActual, segundos, limite));
+
             if(segundos >= limite) {
                 finalizarRiego("LIMITE_TIEMPO");
                 break;
