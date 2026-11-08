@@ -51,7 +51,7 @@ public class Consumidor implements Runnable {
                 ConsumerRecords<String, String> mensajes = consumidor.poll(Duration.ofMillis(500));
                 for(ConsumerRecord<String, String> msg : mensajes) {
                     try {
-                        procesar(msg.topic(), msg.value());
+                        procesar(msg.topic(), msg.value(), msg.timestamp());
                     } catch(RuntimeException e) { // un mensaje roto no debe parar el consumidor
                         System.out.println("Error procesando '" + msg.value() + "': " + e);
                     }
@@ -62,14 +62,16 @@ public class Consumidor implements Runnable {
         }
     }
 
-    // Aqui llega cada mensaje. Los pasos siguientes sustituyen el println por la logica de cada topic.
-    private void procesar(String topic, String valor) {
+    // Aqui llega cada mensaje: segun el topic, se lo pasa al metodo de Riegos que toca.
+    // marca = momento en que el Engine creo el mensaje (lo pone Kafka): sirve para saber si una
+    // telemetria es de antes o de despues del ultimo FIN_RIEGO de esa estacion.
+    private void procesar(String topic, String valor, long marca) {
         if(topic.equals(TOPIC_PETICIONES)) {
             riegos.peticion(valor);
         } else if(topic.equals(TOPIC_EVENTOS)) {
-            riegos.evento(valor);
+            riegos.evento(valor, marca);
         } else {
-            riegos.telemetria(valor);
+            riegos.telemetria(valor, marca);
         }
     }
 }

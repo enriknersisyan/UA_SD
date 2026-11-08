@@ -44,6 +44,7 @@ public class Main {
     private static boolean concluida = false;
     private static String resultado = null;      // "EXITO", "FRACASO" o "SIN_RESPUESTA"
     private static long ultimoMensaje = 0;       // ms del último mensaje sobre la solicitud
+    private static double ultimoVolumen = -1;    // último volumen mostrado del riego en curso
 
 
     private static volatile boolean archivoEnProceso = false; // Para no lanzar dos archivos a la vez
@@ -147,6 +148,13 @@ public class Main {
             } else if(tipo.equals("AUTORIZADO")) {
                 System.out.println("Riego AUTORIZADO en " + idWS + " durante " + campos[2] + " s");
             } else if(tipo.equals("TELEMETRIA")) {
+                // En un riego el volumen solo crece: si no es mayor que el último, es repetida
+                // (Central la reenvía otra vez si se reinicia) y no se muestra
+                double volumen = Double.parseDouble(campos[3]);
+                if(volumen <= ultimoVolumen) {
+                    return;
+                }
+                ultimoVolumen = volumen;
                 System.out.println(idWS + " regando: caudal " + campos[2] + " L/min, volumen " + campos[3] + " L");
             } else if(tipo.equals("FIN_RIEGO")) {
                 System.out.println("===== FIN DEL RIEGO en " + idWS + " =====");
@@ -158,6 +166,10 @@ public class Main {
                     System.out.println("Riego interrumpido por FUGA");
                 } else if(campos[4].equals("BLOQUEO_CENTRAL")) {
                     System.out.println("Riego detenido por CENTRAL");
+                } else if(campos[4].equals("PARADA_CENTRAL")) {
+                    System.out.println("Riego terminado desde CENTRAL");
+                } else if(campos[4].equals("PARADA_FO")) {
+                    System.out.println("Riego terminado a petición del operario");
                 }
 
                 concluida = true;
@@ -169,6 +181,8 @@ public class Main {
                 concluida = true;
                 resultado = "FRACASO";
                 obj.notifyAll();
+            } else if(tipo.equals("PARADA_RECHAZADA")) {
+                System.out.println("CENTRAL no ha terminado el riego en " + idWS + ": todavía no ha empezado o no es tuyo");
             } else {
                 System.out.println("Mensaje desconocido: " + valor);
             }
@@ -277,6 +291,30 @@ public class Main {
         // No se espera: el hilo consumidor irá mostrando las respuestas
     }
 
+    // Pide a CENTRAL terminar el riego en curso de este operario. CENTRAL comprueba que es suyo
+    // y se lo ordena al Engine; el resumen llega después como un FIN_RIEGO normal (motivo PARADA_FO)
+    private static void terminarRiego() {
+        String idWS;
+        synchronized(obj) {
+            if(!solicitudEnCurso || concluida) {
+                System.out.println("No tienes ningún riego en curso");
+                return;
+            }
+            idWS = wsSolicitud;
+        }
+        if(centralCaida()) {
+            System.out.println("*** Imposible conectar con WM_Central: no se puede terminar el riego ahora ***");
+            return;
+        }
+        productor.send(new ProducerRecord<>(TOPIC_PETICIONES, idOperario, "TERMINAR_RIEGO#" + idOperario + "#" + idWS),
+        (metadata, error) -> {
+            if(error != null) {
+                System.out.println("Error: la petición de terminar no ha llegado a Kafka: " + error.getMessage());
+            }
+        });
+        System.out.println("Petición de terminar el riego en " + idWS + " enviada a CENTRAL");
+    }
+
     private static boolean enviarSolicitud(String idWS, int duracion) {
         synchronized(obj) {
             // Comprobar y marcar en el mismo bloque, evita dos solicitudes a la vez
@@ -289,6 +327,7 @@ public class Main {
             concluida = false;
             resultado = null;
             ultimoMensaje = System.currentTimeMillis();
+            ultimoVolumen = -1; // riego nuevo: el volumen vuelve a empezar
         }
 
         productor.send(new ProducerRecord<>(TOPIC_PETICIONES, idOperario, "SOLICITUD_RIEGO#" + idOperario + "#" + idWS + "#" + duracion),
@@ -455,6 +494,7 @@ public class Main {
             System.out.println("[2] -> Solicitar riego");
             System.out.println("[3] -> Cargar solicitudes desde archivo");
             System.out.println("[4] -> Salir");
+            System.out.println("[5] -> Terminar mi riego en curso");
 
             String opcion = sc.nextLine().trim();
 
@@ -475,6 +515,8 @@ public class Main {
             } else if(opcion.equals("4")) {
                 System.out.println("Saliendo");
                 System.exit(0); // termina también los demás hilos y cierra el productor
+            } else if(opcion.equals("5")) {
+                terminarRiego();
             } else {
                 System.out.println("Opción no válida");
             }

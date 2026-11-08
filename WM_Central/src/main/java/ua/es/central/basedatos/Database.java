@@ -42,6 +42,11 @@ public class Database{
                 + "id TEXT PRIMARY KEY, "
                 + "ubicacion TEXT NOT NULL, "
                 + "estado TEXT NOT NULL)");
+
+            // Estaciones bloqueadas desde Central: el bloqueo se recuerda aunque Central se reinicie
+            sentencia.execute(
+                "CREATE TABLE IF NOT EXISTS bloqueada ("
+                + "id TEXT PRIMARY KEY)");
         }
 	}
 	public Connection getConexion(){

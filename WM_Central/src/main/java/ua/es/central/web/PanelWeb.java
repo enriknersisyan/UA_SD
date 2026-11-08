@@ -127,6 +127,12 @@ public class PanelWeb {
                 }
                 responderOrden(ex, 200, true, "Orden de bloqueo enviada a " + texto);
                 break;
+            case "TERMINAR":
+                for(String id : destinos) {
+                    ordenes.terminar(id);
+                }
+                responderOrden(ex, 200, true, "Orden de terminar el riego enviada a " + texto);
+                break;
             case "ACTIVAR":
                 for(String id : destinos) {
                     ordenes.activar(id);

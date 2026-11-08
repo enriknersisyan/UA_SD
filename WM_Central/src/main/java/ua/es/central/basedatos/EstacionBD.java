@@ -5,7 +5,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import ua.es.central.modelo.Estacion;
 import ua.es.central.modelo.Estado;
@@ -66,9 +68,36 @@ public class EstacionBD{
 			}
 		}
 	}
-	// Borra una estacion. Devuelve si existia
+	// Apunta (bloqueada = true) o quita (false) una estacion de la tabla de bloqueadas
+	public void marcarBloqueada(String id, boolean bloqueada) throws SQLException {
+		synchronized(conexion){
+			String sql = bloqueada
+				? "INSERT OR IGNORE INTO bloqueada (id) VALUES (?)"
+				: "DELETE FROM bloqueada WHERE id = ?";
+			try(PreparedStatement ps = conexion.prepareStatement(sql)){
+				ps.setString(1, id);
+				ps.executeUpdate();
+			}
+		}
+	}
+	// Devuelve los id de las estaciones bloqueadas
+	public Set<String> listarBloqueadas() throws SQLException {
+		synchronized(conexion){
+			Set<String> resultado = new HashSet<>();
+			String sql = "SELECT id FROM bloqueada";
+			try (PreparedStatement ps = conexion.prepareStatement(sql);
+				 ResultSet rs = ps.executeQuery()) {
+				while (rs.next()) {
+					resultado.add(rs.getString("id"));
+				}
+			}
+			return resultado;
+		}
+	}
+	// Borra una estacion (y su bloqueo, si lo tenia). Devuelve si existia
 	public boolean borrar(String id) throws SQLException {
 		synchronized(conexion){
+			marcarBloqueada(id, false);
 			String sql = "DELETE FROM estacion WHERE id = ?";
 			try(PreparedStatement ps = conexion.prepareStatement(sql)){
 				ps.setString(1, id);

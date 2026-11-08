@@ -18,6 +18,7 @@ public class RegistroEstaciones {
      private final EstacionBD bd;
      private final List<BiConsumer<String, Estado>> oyentes = new CopyOnWriteArrayList<>();
      // Estaciones bloqueadas desde Central: el bloqueo se recuerda aunque el Monitor se desconecte
+     // y, como tambien se guarda en la BD, aunque Central se reinicie
      private final Set<String> bloqueadas = ConcurrentHashMap.newKeySet();
 
      /**
@@ -28,6 +29,11 @@ public class RegistroEstaciones {
             bloqueadas.add(id);
         } else {
             bloqueadas.remove(id);
+        }
+        try {
+            bd.marcarBloqueada(id, bloqueada);
+        } catch (SQLException e) {
+            System.out.println("Error al guardar el bloqueo de la estacion " + id + ": " + e.getMessage());
         }
      }
 
@@ -52,11 +58,16 @@ public class RegistroEstaciones {
         this.bd = bd;
      }
 	 /**
-     * Carga el registro de estaciones con las estaciones dadas, inicializando su estado a DESCONECTADA
+     * Carga el registro de estaciones con las estaciones dadas, inicializando su estado a DESCONECTADA,
+     * y recupera de la BD cuales estaban bloqueadas (al registrarse volveran FUERA_DE_SERVICIO)
      **/
-     public void cargar(List<Estacion> estaciones) {
+     public void cargar(List<Estacion> estaciones) throws SQLException {
         for(Estacion e : estaciones) {
             estados.put(e.id(), Estado.DESCONECTADA);
+        }
+        bloqueadas.addAll(bd.listarBloqueadas());
+        if(!bloqueadas.isEmpty()) {
+            System.out.println("Estaciones bloqueadas: " + bloqueadas);
         }
     }
     /**
@@ -154,7 +165,7 @@ public class RegistroEstaciones {
             return false;
         }
         bloqueadas.remove(id);
-        bd.borrar(id);
+        bd.borrar(id);   // borra tambien su bloqueo de la BD
         return true;
     }
 
