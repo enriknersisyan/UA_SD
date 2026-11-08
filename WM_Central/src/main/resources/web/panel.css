@@ -288,26 +288,26 @@ td {
     color: var(--gris);
 }
 
-/* Verde parpadeando para "Regando" (solo en tabla y detalle, no en el recuento) */
-.estado.estado-regando {
-    animation: parpadeo 1s ease-in-out infinite;
-}
+/* Verde parpadeando para "Regando" (solo en tabla y detalle, no en el recuento).
+   La tabla se redibuja cada segundo y eso reiniciaría una animación CSS, así que el ritmo lo
+   marca panel.js: cada medio segundo alterna la clase "parpadeo" en <body>.
+   Encendido: etiqueta en verde fuerte y toda la fila de la estación iluminada. */
+@media (prefers-reduced-motion: no-preference) {
+    body.parpadeo .estado.estado-regando {
+        background: var(--verde);
+        color: var(--superficie);
+    }
 
-@keyframes parpadeo {
-    50% {
-        background: var(--verde-pulso);
+    body.parpadeo #tabla tr:has(.estado-regando) td {
+        background: var(--verde-fondo);
     }
 }
 
 /* Si el usuario pide menos movimiento, el parpadeo se sustituye por un símbolo */
 @media (prefers-reduced-motion: reduce) {
-    .estado.estado-regando {
-        animation: none;
+    .estado.estado-regando::before {
+        content: "● ";
     }
-
-        .estado.estado-regando::before {
-            content: "● ";
-        }
 }
 
 /* ---------- Etiqueta de fase de una petición ---------- */
@@ -487,6 +487,17 @@ button {
     background: var(--verde-fondo);
     color: var(--verde);
     border-color: var(--verde);
+}
+
+/* Órdenes de riego: 4 botones en 2 filas de 2 */
+.botones-riego {
+    grid-template-columns: 1fr 1fr;
+}
+
+.b-terminar {
+    background: var(--rojo-fondo);
+    color: var(--rojo);
+    border-color: var(--rojo);
 }
 
 .b-bloquear {

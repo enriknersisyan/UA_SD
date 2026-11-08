@@ -25,7 +25,7 @@
 //    ]
 //  }
 //
-//  POST /api/orden <- accion=INICIAR|BLOQUEAR|ACTIVAR & idWS=WS-01|TODAS & duracion=30
+//  POST /api/orden <- accion=INICIAR|TERMINAR|BLOQUEAR|ACTIVAR & idWS=WS-01|TODAS & duracion=30
 // ==========================================================
 
 // ---------------- Configuración ----------------
@@ -394,20 +394,23 @@ function pintarBotones() {
     const iniciar = document.querySelector('[data-accion="INICIAR"]');
     const bloquear = document.querySelector('[data-accion="BLOQUEAR"]');
     const activar = document.querySelector('[data-accion="ACTIVAR"]');
+    const terminar = document.querySelector('[data-accion="TERMINAR"]');
 
     if (!conectado) {
-        iniciar.disabled = bloquear.disabled = activar.disabled = true;
+        iniciar.disabled = bloquear.disabled = activar.disabled = terminar.disabled = true;
         return;
     }
     if (destino === "todas") {
         iniciar.disabled = bloquear.disabled = activar.disabled = estaciones.length === 0;
+        terminar.disabled = !estaciones.some(x => x.estado === "REGANDO");
         return;
     }
     if (!e) {
-        iniciar.disabled = bloquear.disabled = activar.disabled = true;
+        iniciar.disabled = bloquear.disabled = activar.disabled = terminar.disabled = true;
         return;
     }
     iniciar.disabled = e.estado !== "DISPONIBLE";                                   // punto 4, pág. 7
+    terminar.disabled = e.estado !== "REGANDO";                                     // termina sin bloquear
     bloquear.disabled = e.estado === "FUERA_DE_SERVICIO" || e.estado === "DESCONECTADA";
     activar.disabled = e.estado !== "FUERA_DE_SERVICIO";
 }
@@ -440,3 +443,7 @@ document.querySelectorAll("[data-gestion]").forEach(b =>
 
 actualizar();
 setInterval(actualizar, PERIODO_MS);
+
+// Parpadeo de "Regando": alterna cada medio segundo una clase en <body> (ver panel.css).
+// Va aparte de la tabla porque la tabla se redibuja cada segundo.
+setInterval(() => document.body.classList.toggle("parpadeo"), 500);

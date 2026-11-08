@@ -60,6 +60,15 @@ public class Main {
     private static final String TOPIC_ORDENES = "topicOrdenes";       // CENTRAL → Engine
     private static final String TOPIC_EVENTOS = "topicEventos";       // Engine → CENTRAL
     private static final String TOPIC_TELEMETRIA = "topicTelemetria"; // Engine → CENTRAL
+    private static final String TOPIC_ESTADOS = "topicEstados";       // CENTRAL → todos (cada 2 s)
+
+    // Central publica los estados cada 2 s: si no llega ninguno en 6 s, Central ha caído (igual que en el FO)
+    private static final int SIN_CENTRAL_MS = 6000;
+    private static volatile long ultimoEstadoCentral = System.currentTimeMillis();
+
+    private static boolean centralCaida() {
+        return System.currentTimeMillis() - ultimoEstadoCentral >= SIN_CENTRAL_MS;
+    }
 
     // Carpeta donde se guarda el riego en curso, para no perderlo si el Engine se cae
     // (en Docker se monta un volumen ahí)
@@ -246,6 +255,11 @@ public class Main {
                         System.out.println("WS AVERIADA: sin conexión con el Monitor. No se admiten riegos");
                         continue;
                     }
+                    // Con Central caída no se admiten peticiones nuevas (guía de corrección): ni se envían
+                    if(centralCaida()) {
+                        System.out.println("*** Imposible conectar con WM_Central: no se pueden pedir riegos ahora ***");
+                        continue;
+                    }
                     System.out.println("Introduzca la duración(s): ");
 
                     int duracion;
@@ -296,12 +310,18 @@ public class Main {
 
         try(KafkaConsumer<String, String> consumidor = new KafkaConsumer<>(props)) {
             // Se suscribe a los topics
-            consumidor.subscribe(List.of(TOPIC_ORDENES));
+            consumidor.subscribe(List.of(TOPIC_ORDENES, TOPIC_ESTADOS));
 
             for(;;) {
                 ConsumerRecords<String, String> mensajes = consumidor.poll(Duration.ofMillis(500));
 
                 for(ConsumerRecord<String, String> msg : mensajes) {
+                    // Un estado de Central solo sirve para saber que Central sigue viva
+                    if(msg.topic().equals(TOPIC_ESTADOS)) {
+                        ultimoEstadoCentral = System.currentTimeMillis();
+                        continue;
+                    }
+
                     // Se comprueba si la orden que acaba de llegar de Kafka es para esta estación
                     if(!idWS.equals(msg.key())) {
                         continue;
@@ -351,6 +371,16 @@ public class Main {
                             if(pendienteInicio) {
                                 pendienteInicio = false;
                                 System.out.println("Riego cancelado por CENTRAL");
+                            }
+                        }
+                    } else if(accion.equals("TERMINAR")) { // Central (o un FO a través de Central) pide terminar el riego
+                        // TERMINAR#motivo: PARADA_CENTRAL o PARADA_FO
+                        String motivo = campos.length > 1 ? campos[1] : "PARADA_CENTRAL";
+                        synchronized(obj) {
+                            if(riego || pendienteInicio) {
+                                finalizarRiego(motivo);
+                            } else {
+                                System.out.println("Orden de terminar ignorada: no hay ningún riego en curso");
                             }
                         }
                     } else if(accion.equals("BLOQUEAR")) { // si la central pide bloquear
@@ -480,6 +510,10 @@ public class Main {
 
             // Se envia fuera para no bloquear a los demás hilos
             enviar(TOPIC_TELEMETRIA, "TELEMETRIA#" + idWS + "#" + caudal + "#" + volumenActual + "#" + operario);
+
+            // Se muestra también en la pantalla del Engine, cada segundo
+            System.out.println(String.format("Regando (%s): caudal %.1f L/min, volumen %.2f L, %d de %d s",
+                operario, caudal, volumenActual, segundos, limite));
 
             if(segundos >= limite) {
                 finalizarRiego("LIMITE_TIEMPO");

@@ -3,6 +3,7 @@ package ua.es.central.logica;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiConsumer;
@@ -16,6 +17,30 @@ public class RegistroEstaciones {
     
      private final EstacionBD bd;
      private final List<BiConsumer<String, Estado>> oyentes = new CopyOnWriteArrayList<>();
+     // Estaciones bloqueadas desde Central: el bloqueo se recuerda aunque el Monitor se desconecte
+     // y, como tambien se guarda en la BD, aunque Central se reinicie
+     private final Set<String> bloqueadas = ConcurrentHashMap.newKeySet();
+
+     /**
+      * Apunta o quita una estacion de las bloqueadas (lo llaman bloquear y activar de Comandos)
+      */
+     public void marcarBloqueada(String id, boolean bloqueada) {
+        if(bloqueada) {
+            bloqueadas.add(id);
+        } else {
+            bloqueadas.remove(id);
+        }
+        try {
+            bd.marcarBloqueada(id, bloqueada);
+        } catch (SQLException e) {
+            System.out.println("Error al guardar el bloqueo de la estacion " + id + ": " + e.getMessage());
+        }
+     }
+
+     // Estado de una estacion sana: FUERA_DE_SERVICIO si esta bloqueada, si no DISPONIBLE
+     private Estado estadoSana(String id) {
+        return bloqueadas.contains(id) ? Estado.FUERA_DE_SERVICIO : Estado.DISPONIBLE;
+     }
 
      /**
       * Registra a alguien que quiere enterarse de cada cambio de estado de una estacion
@@ -33,11 +58,16 @@ public class RegistroEstaciones {
         this.bd = bd;
      }
 	 /**
-     * Carga el registro de estaciones con las estaciones dadas, inicializando su estado a DESCONECTADA
+     * Carga el registro de estaciones con las estaciones dadas, inicializando su estado a DESCONECTADA,
+     * y recupera de la BD cuales estaban bloqueadas (al registrarse volveran FUERA_DE_SERVICIO)
      **/
-     public void cargar(List<Estacion> estaciones) {
+     public void cargar(List<Estacion> estaciones) throws SQLException {
         for(Estacion e : estaciones) {
             estados.put(e.id(), Estado.DESCONECTADA);
+        }
+        bloqueadas.addAll(bd.listarBloqueadas());
+        if(!bloqueadas.isEmpty()) {
+            System.out.println("Estaciones bloqueadas: " + bloqueadas);
         }
     }
     /**
@@ -57,11 +87,13 @@ public class RegistroEstaciones {
             return "KO";
         }
         // si dos monitores llegan gana uno, KO si ya hay uno conectado
-        if(!estados.replace(id, Estado.DESCONECTADA, Estado.DISPONIBLE)){
+        // si estaba bloqueada, vuelve bloqueada (FUERA_DE_SERVICIO); si no, DISPONIBLE
+        Estado inicial = estadoSana(id);
+        if(!estados.replace(id, Estado.DESCONECTADA, inicial)){
             return "KO";
         }
-        
-        guardar(id, Estado.DISPONIBLE);
+
+        guardar(id, inicial);
         return "OK";
     }
 
@@ -82,8 +114,9 @@ public class RegistroEstaciones {
         switch(comando) {
             case "STATUS":  break;
             case "LEAK":       estados.put(id, Estado.FUGA); guardar(id, Estado.FUGA);      break;
-            case "LEAK_FIXED": if(estados.replace(id, Estado.FUGA, Estado.DISPONIBLE)) {
-                                    guardar(id, Estado.DISPONIBLE);}      break;
+            case "LEAK_FIXED": Estado vuelta = estadoSana(id);
+                               if(estados.replace(id, Estado.FUGA, vuelta)) {
+                                    guardar(id, vuelta);}      break;
 
             default:           return "KO";
         }
@@ -131,7 +164,8 @@ public class RegistroEstaciones {
         if(!estados.remove(id, Estado.DESCONECTADA)) {
             return false;
         }
-        bd.borrar(id);
+        bloqueadas.remove(id);
+        bd.borrar(id);   // borra tambien su bloqueo de la BD
         return true;
     }
 

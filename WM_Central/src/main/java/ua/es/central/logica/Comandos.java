@@ -43,6 +43,7 @@ public class Comandos implements Runnable {
             for(;;) {
                 System.out.println("\nCOMANDOS: [1] Iniciar riego  [2] Bloquear estacion  [3] Activar estacion");
                 System.out.println("          [4] Anadir estacion  [5] Cambiar ubicacion  [6] Borrar estacion");
+                System.out.println("          [7] Terminar riego");
                 String opcion = sc.nextLine().trim();
                 if(opcion.equals("1")) {
                     iniciar(sc);
@@ -60,6 +61,8 @@ public class Comandos implements Runnable {
                     System.out.println(cambiarUbicacion(id, sc.nextLine().trim()).mensaje());
                 } else if(opcion.equals("6")) {
                     System.out.println(borrarEstacion(pedirId(sc)).mensaje());
+                } else if(opcion.equals("7")) {
+                    terminar(pedirId(sc));
                 } else {
                     System.out.println("Opcion no valida");
                 }
@@ -113,6 +116,7 @@ public class Comandos implements Runnable {
          * Si el estado cambio justo ahora, no hace nada.
          */
         if(registro.cambiar(id, actual, Estado.FUERA_DE_SERVICIO)) {
+            registro.marcarBloqueada(id, true);   // se recuerda aunque el Monitor se desconecte
             productor.enviar(Productor.TOPIC_ORDENES, id, "BLOQUEAR");
             panel.anotar("Bloqueo enviado a " + id);
         } else {
@@ -121,10 +125,25 @@ public class Comandos implements Runnable {
     }
 
     /**
+     * Termina el riego en curso de una estacion sin bloquearla: el Engine cierra la valvula,
+     * envia su FIN_RIEGO (motivo PARADA_CENTRAL) y la estacion vuelve a DISPONIBLE
+     */
+    public void terminar(String id) {
+        if(registro.estado(id) != Estado.REGANDO) {
+            // como en bloquear, solo por consola: con "Todas" no se llena el panel de avisos
+            System.out.println("No se puede terminar el riego de " + id + " (estado " + registro.estado(id) + ")");
+            return;
+        }
+        productor.enviar(Productor.TOPIC_ORDENES, id, "TERMINAR#PARADA_CENTRAL");
+        panel.anotar("Orden de terminar el riego enviada a " + id);
+    }
+
+    /**
      * Solo una estacion fuera de servicio vuelve a DISPONIBLE
      */
     public void activar(String id) {
         if(registro.cambiar(id, Estado.FUERA_DE_SERVICIO, Estado.DISPONIBLE)) {
+            registro.marcarBloqueada(id, false);
             productor.enviar(Productor.TOPIC_ORDENES, id, "ACTIVAR");
             panel.anotar("Activacion enviada a " + id);
         } else {

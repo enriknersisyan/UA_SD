@@ -1,6 +1,6 @@
 COMANDOS DOCKER - WaterManagement (version corta)
 =================================================
-Central: ballast.proxy.rlwy.net 13440 | Kafka: hayabusa.proxy.rlwy.net 55562
+Central: reseau.proxy.rlwy.net 10190 | Kafka: trolley.proxy.rlwy.net 24672
 Panel:   https://uasd-production-a762.up.railway.app
 Todo en PowerShell, desde la carpeta raiz del repo (UA_SD), con Docker Desktop encendido.
 
@@ -9,17 +9,17 @@ Todo en PowerShell, desde la carpeta raiz del repo (UA_SD), con Docker Desktop e
    docker build -f WM_WS/WM_WS_M/Dockerfile -t wm-ws-m .     (equipo estacion)
    docker build -f WM_WS/WM_WS_E/Dockerfile -t wm-ws-e .     (equipo estacion)
    docker build -f WM_FO/Dockerfile -t wm-fo .               (equipo FO)
-   Test-NetConnection ballast.proxy.rlwy.net -Port 13440     (debe dar True)
-   Test-NetConnection hayabusa.proxy.rlwy.net -Port 55562    (debe dar True)
+   Test-NetConnection reseau.proxy.rlwy.net -Port 10190     (debe dar True)
+   Test-NetConnection trolley.proxy.rlwy.net -Port 24672    (debe dar True)
 
 2. ESTACION (Monitor primero, luego Engine; cada uno en su terminal)
    docker network create wm-lab
-   docker run --rm --name wm-monitor1 --network wm-lab wm-ws-m 6000 ballast.proxy.rlwy.net 13440 WS-01
-   docker run -it --rm --name wm-engine1 --network wm-lab -v wm-engine-ws01:/datos wm-ws-e hayabusa.proxy.rlwy.net 55562 wm-monitor1 6000
+   docker run --rm --name wm-monitor1 --network wm-lab wm-ws-m 6000 reseau.proxy.rlwy.net 10190 WS-01
+   docker run -it --rm --name wm-engine1 --network wm-lab -v wm-engine-ws01:/datos wm-ws-e trolley.proxy.rlwy.net 24672 wm-monitor1 6000
    Otra estacion: cambiar wm-monitor1 -> wm-monitor2, WS-01 -> WS-02, wm-engine1 -> wm-engine2, wm-engine-ws01 -> wm-engine-ws02
 
 3. FO (un terminal por operario, cada uno con ID distinto: FO-01 ... FO-10)
-   docker run -it --rm --name wm-fo1 -v "${PWD}\datos:/datos" wm-fo hayabusa.proxy.rlwy.net 55562 FO-01
+   docker run -it --rm --name wm-fo1 -v "${PWD}\datos:/datos" wm-fo trolley.proxy.rlwy.net 24672 FO-01
    Archivo de riegos: opcion 3 -> /datos/riegos.txt
 
 4. TUMBAR Y RECUPERAR
